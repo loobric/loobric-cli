@@ -18,7 +18,7 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
-from smooth_client.importers.base import CatalogRecordDraft
+from loobric.importers.base import CatalogRecordDraft
 
 SOURCE = "gtc-import"
 CLIENT_NAME = "import:gtc"

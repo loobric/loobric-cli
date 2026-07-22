@@ -11,8 +11,8 @@ whole source payload is kept on each draft for lossless preservation.
 from pathlib import Path
 from typing import List, Union
 
-from smooth_client.importers.base import CatalogRecordDraft
-from smooth_client.importers.din4000 import _codes, _csv, _xml
+from loobric.importers.base import CatalogRecordDraft
+from loobric.importers.din4000 import _codes, _csv, _xml
 
 # The declared actor for DIN 4000 imports; the server stamps
 # ``asserted:din4000-import`` on every canonical field.

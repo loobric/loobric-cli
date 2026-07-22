@@ -1,7 +1,7 @@
 # MIT License
 # Copyright (c) 2025 sliptonic
 # SPDX-License-Identifier: MIT
-"""HTTP transport and session state for the Smooth client. Stdlib only, so the
+"""HTTP transport and session state for the Loobric client. Stdlib only, so the
 package can be vendored or run in constrained interpreters (e.g. FreeCAD)."""
 import http.client
 import json
@@ -10,8 +10,8 @@ import urllib.parse
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from smooth_client.errors import (
-    AuthRequired, ConnectionFailed, HTTPError, NotFound, SmoothClientError, _http_error,
+from loobric.errors import (
+    AuthRequired, ConnectionFailed, HTTPError, NotFound, LoobricClientError, _http_error,
 )
 
 # Module-level session/auth state, set by the CLI. A Client carries its own and
@@ -19,7 +19,7 @@ from smooth_client.errors import (
 SESSION_COOKIE: Optional[str] = None
 API_KEY: Optional[str] = None
 BASE_URL: str = ""
-SESSION_DIR = Path.home() / ".smooth"
+SESSION_DIR = Path.home() / ".loobric"
 SESSION_FILE = SESSION_DIR / "session.json"
 
 
@@ -76,7 +76,7 @@ def save_base_url(base_url: str, email: str = None):
 
     `register` has no session cookie yet but should still pin the server it ran
     against, so the user's next command targets the same place without
-    re-passing --base-url or re-exporting SMOOTH_BASE_URL. Merges with any
+    re-passing --base-url or re-exporting LOOBRIC_BASE_URL. Merges with any
     existing session so a prior login's cookie is preserved.
     """
     if not base_url:
@@ -118,7 +118,7 @@ def get_connection(base_url: Optional[str] = None):
     elif parsed.scheme == "http":
         return http.client.HTTPConnection(parsed.netloc)
     else:
-        raise SmoothClientError(f"Unsupported scheme in base URL: {parsed.scheme!r}")
+        raise LoobricClientError(f"Unsupported scheme in base URL: {parsed.scheme!r}")
 
 
 def make_request(
@@ -133,10 +133,10 @@ def make_request(
     raw_body: Optional[bytes] = None,
     content_type: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Make an HTTP request to the Smooth API and return parsed JSON.
+    """Make an HTTP request to the Loobric API and return parsed JSON.
 
     The transport for both the CLI and the `Client` library. It NEVER prints or
-    exits — on failure it raises a `SmoothClientError` subclass (`NotFound`,
+    exits — on failure it raises a `LoobricClientError` subclass (`NotFound`,
     `AuthRequired`, `HTTPError`, `ConnectionFailed`). `base_url` / `api_key` /
     `session_cookie` override the module globals so a `Client` can carry its own
     config; when omitted the globals (set by the CLI) are used.
@@ -164,7 +164,7 @@ def make_request(
         headers["Content-Type"] = content_type
 
     # Prefer API key over session cookie. With neither, send anyway and let the
-    # server decide: a solo-mode server (SMOOTH_SOLO=1) accepts it; a multi-user
+    # server decide: a solo-mode server (LOOBRIC_SOLO=1) accepts it; a multi-user
     # server returns 401. The client must not pre-judge auth.
     key = api_key if api_key is not None else API_KEY
     cookie = session_cookie if session_cookie is not None else SESSION_COOKIE

@@ -5,15 +5,15 @@
 from typing import Any
 
 
-class SmoothClientError(Exception):
+class LoobricClientError(Exception):
     """Base class for every error the loobric library raises."""
 
 
-class ConnectionFailed(SmoothClientError):
+class ConnectionFailed(LoobricClientError):
     """The server could not be reached (network/DNS/refused/timeout)."""
 
 
-class HTTPError(SmoothClientError):
+class HTTPError(LoobricClientError):
     """The server returned a non-2xx status. Carries .status and .detail."""
 
     def __init__(self, status: int, detail: Any):

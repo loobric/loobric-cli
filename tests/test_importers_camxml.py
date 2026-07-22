@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from smooth_client import importers
-from smooth_client.importers import hypermill, solidcam
+from loobric import importers
+from loobric.importers import hypermill, solidcam
 
 FIXTURES = Path(__file__).parent / "fixtures" / "importers"
 

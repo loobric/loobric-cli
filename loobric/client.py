@@ -1,31 +1,31 @@
 # MIT License
 # Copyright (c) 2025 sliptonic
 # SPDX-License-Identifier: MIT
-"""The Smooth client library: a Client with one method per public API operation.
-Returns parsed data; raises SmoothClientError subclasses. Stdlib only.
+"""The Loobric client library: a Client with one method per public API operation.
+Returns parsed data; raises LoobricClientError subclasses. Stdlib only.
 
-    from smooth_client import Client, NotFound
+    from loobric import Client, NotFound
     c = Client(base_url="http://nas:8000", api_key="...")   # solo: omit api_key
     for s in c.list_tool_sets(): ...
 """
 import json
 from typing import Any, Dict, List, Optional
 
-from smooth_client import transport as transport_mod
-from smooth_client.errors import (
-    AuthRequired, ConnectionFailed, HTTPError, NotFound, SmoothClientError,
+from loobric import transport as transport_mod
+from loobric.errors import (
+    AuthRequired, ConnectionFailed, HTTPError, NotFound, LoobricClientError,
 )
 
 
 class Client:
-    """A reusable Smooth API client. Returns data; raises SmoothClientError."""
+    """A reusable Loobric API client. Returns data; raises LoobricClientError."""
 
     def __init__(self, base_url: Optional[str] = None, api_key: Optional[str] = None,
                  session_cookie: Optional[str] = None, transport=None):
         self.base_url = (base_url or transport_mod.BASE_URL or "").rstrip("/")
         self.api_key = api_key
         self.session_cookie = session_cookie
-        # transport(method, endpoint, **kw) -> dict, raising SmoothClientError. Defaults
+        # transport(method, endpoint, **kw) -> dict, raising LoobricClientError. Defaults
         # to transport.make_request (real HTTP); a test can inject one that calls the app
         # in-process. None => resolve transport.make_request at call time (so patching the
         # module-level transport.make_request still intercepts).

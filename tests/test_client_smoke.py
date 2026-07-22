@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 """Smoke tests for the extracted library: it imports, dispatches through its
 transport, and keeps the call-time transport hook so tests can patch it."""
-from smooth_client import AuthRequired, Client, NotFound, SmoothClientError
+from loobric import AuthRequired, Client, NotFound, LoobricClientError
 
 
 def test_injected_transport_receives_calls():
@@ -19,7 +19,7 @@ def test_injected_transport_receives_calls():
 
 
 def test_patching_transport_make_request_intercepts(monkeypatch):
-    import smooth_client.transport as transport
+    import loobric.transport as transport
 
     seen = {}
 
@@ -33,5 +33,5 @@ def test_patching_transport_make_request_intercepts(monkeypatch):
 
 
 def test_error_hierarchy_exported():
-    assert issubclass(NotFound, SmoothClientError)
-    assert issubclass(AuthRequired, SmoothClientError)
+    assert issubclass(NotFound, LoobricClientError)
+    assert issubclass(AuthRequired, LoobricClientError)

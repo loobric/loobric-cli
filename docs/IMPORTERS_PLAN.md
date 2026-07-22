@@ -1,8 +1,8 @@
 # Format Importers — Plan
 
-Tracks [smooth-core#31](https://github.com/loobric/smooth-core/issues/31).
-This is the plan for importing tool data from known external formats into Smooth.
-It lives in `loobric-smooth` because importing is a **client** job: an importer
+Tracks [loobric-core#31](https://github.com/loobric/loobric-core/issues/31).
+This is the plan for importing tool data from known external formats into Loobric.
+It lives in `loobric-cli` because importing is a **client** job: an importer
 parses a file and pushes the result through the public API. The server never
 parses a vendor format.
 
@@ -101,7 +101,7 @@ source file  ──parse──▶  ToolDescriptor(s)  ──map──▶  canoni
                                                           item_type})
 ```
 
-- **`smooth_client/importers/`** — a subpackage, imported only when the
+- **`loobric/importers/`** — a subpackage, imported only when the
   `[importers]` extra is installed. The stdlib‑only promise of the core
   (`Client`, `transport`, `cli`) is unaffected; heavy deps live here and nowhere
   else. CI already runs the base on 3.9/3.12 with no deps to guard this.
@@ -110,7 +110,7 @@ source file  ──parse──▶  ToolDescriptor(s)  ──map──▶  canoni
   (`name`, `manufacturer`, `product_code`, nominal `geometry.*`, optional
   `item_type`) **plus** the raw source document to preserve. No HTTP, no
   provenance strings — the importer states *values*, not *sources*.
-- **A thin driver** (`importers/run.py` + a `smooth import` CLI verb) takes the
+- **A thin driver** (`importers/run.py` + a `loobric import` CLI verb) takes the
   drafts and calls the existing `Client.create_catalog_record(source=..., fields=...)`.
   The **server** stamps `asserted:<source>` on every field (the client never
   writes provenance — TOOL_SCHEMA §3.2/§4). The raw source document is written
@@ -185,7 +185,7 @@ the description `ENDMILL … 1/16X1/8X1/8X1 1/2` and order code:
 | `NSM`=`DIN4000-82` | `geometry.shape` | endmill *(the class **declares** the type — read, not inferred)* |
 
 All map to keys the server's `Geometry` contract model actually defines (verified
-against `smooth/contract/models.py`), so none get rejected or silently dropped.
+against `loobric/contract/models.py`), so none get rejected or silently dropped.
 
 ## 4. The hard part: ISO 13399 property semantics
 
@@ -242,8 +242,8 @@ decode comes last.
   1/16″ 4‑flute endmill) obtained in CSV, XML 2013, and XML 2016, committed
   trimmed under `tests/fixtures/importers/`.
 - **Phase 1 — Importer framework + DIN 4000 (CSV **and** XML). ✅ DONE.**
-  `smooth_client/importers/` (`base.CatalogRecordDraft`, `run.import_drafts`
-  driver, `din4000/` reader), the `smooth import <file>` CLI verb (`--dry-run`,
+  `loobric/importers/` (`base.CatalogRecordDraft`, `run.import_drafts`
+  driver, `din4000/` reader), the `loobric import <file>` CLI verb (`--dry-run`,
   `--no-preserve`, `--source`), fixtures and 12 tests (84 total green). Because
   CSV and both XML editions carry the *identical* DIN feature codes, one shared
   mapper (`din4000/_codes.py`) serves all three — so the XML work folded in here
@@ -251,14 +251,14 @@ decode comes last.
   parse to byte‑identical canonical fields.** Driver handles natural‑key `409`
   as *skipped*, preserves the full raw payload in the record's client section.
 - **Phase 2 — GTC package + Phase 3 — P21 geometry. ✅ DONE (together).**
-  `smooth_client/importers/p21.py` is a stdlib line tokenizer for STEP Part 21;
+  `loobric/importers/p21.py` is a stdlib line tokenizer for STEP Part 21;
   `gtc.py` reads a GTC ZIP. **Key finding from the real Kennametal exports:** the
   CIMSOURCE/ToolsUnited P21 writes the human-readable ISO 13399 *mnemonic* into
   every value entity (`NUMERICAL_VALUE('DC', $, #119, '6.35')`), so identity AND
   geometry come straight out — **no `steputils`, no PLIB dictionary, stdlib
   only.** One reader handles **both** GTC 2.x and GTC 2017 (the ToolsUnited
   per-file inner-zip layout — unwrapped transparently). The 3D STEP models +
-  images are extracted and uploaded as **canonical media** (smooth-core's new
+  images are extracted and uploaded as **canonical media** (loobric-core's new
   `media` feature). `shape` comes from the GTC class (`MILSQS → endmill`),
   `item_type` from the P21 `SPECIFIC_ITEM_CLASSIFICATION('tool item')`. Verified
   against real GTC17, GTC20, and standalone P21; 8 tests, synthetic fixtures.
@@ -292,7 +292,7 @@ the XML exports above (HyperMill `.db`/`.mdb`, SolidCAM `.TAB`/`.tlv`/`.tls`).
 
 ## 6. Testing
 
-- **Golden‑file fixtures**, mirroring smooth‑core's `tests/fixtures/schema/`
+- **Golden‑file fixtures**, mirroring loobric‑core's `tests/fixtures/schema/`
   approach: a tiny, synthetic (or minimally‑redacted) sample per format committed
   to `tests/fixtures/importers/`, plus the expected `CatalogRecordDraft` output.
   Parser tests run offline, no server.
@@ -327,7 +327,7 @@ the XML exports above (HyperMill `.db`/`.mdb`, SolidCAM `.TAB`/`.tlv`/`.tls`).
 1. ~~Where did the format strings come from?~~ **Resolved: Kennametal's export
    menu** (§2). Field mappings come from real Kennametal exports.
 2. **Split `[importers]` into per‑format extras**, or keep one umbrella?
-3. **Do you want a `smooth import <format> <file>` CLI verb, a `Client` method,
+3. **Do you want a `loobric import <format> <file>` CLI verb, a `Client` method,
    or both?** (Plan assumes both: a `parse()` library entry point + a CLI verb.)
 
 ### Decided

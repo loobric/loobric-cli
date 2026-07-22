@@ -5,7 +5,7 @@
 
 An importer is a *pure parse-and-map* step. It never opens a socket: it turns a
 file into one or more :class:`CatalogRecordDraft` (canonical `fields` + the raw
-source payload to preserve). The :mod:`smooth_client.importers.run` driver is
+source payload to preserve). The :mod:`loobric.importers.run` driver is
 what pushes those drafts through the public API — so parsing is offline,
 testable, and the network concern lives in exactly one place.
 
@@ -20,7 +20,7 @@ import re
 from pathlib import Path
 from typing import List, Union
 
-from smooth_client.importers.base import CatalogRecordDraft, MediaFile
+from loobric.importers.base import CatalogRecordDraft, MediaFile
 
 __all__ = ["CatalogRecordDraft", "MediaFile", "parse"]
 
@@ -44,17 +44,17 @@ def parse(path: Union[str, Path]) -> List[CatalogRecordDraft]:
     name = str(path).lower()
     head = Path(path).read_bytes()[:2048]
     if name.endswith(".zip") or head[:2] == b"PK":
-        from smooth_client.importers import gtc
+        from loobric.importers import gtc
         return gtc.parse(path)
     if (name.endswith((".p21", ".stp", ".step"))
             or head.lstrip().startswith(b"ISO-10303-21")):
-        from smooth_client.importers import p21
+        from loobric.importers import p21
         return p21.parse(path)
     if name.endswith(".xml") or head.lstrip()[:1] == b"<":
         module = _XML_ROOTS.get(_xml_root_tag(head), "din4000")
-        mod = __import__("smooth_client.importers." + module, fromlist=["parse"])
+        mod = __import__("loobric.importers." + module, fromlist=["parse"])
         return mod.parse(path)
-    from smooth_client.importers import din4000
+    from loobric.importers import din4000
     return din4000.parse(path)
 
 

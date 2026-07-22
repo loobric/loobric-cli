@@ -13,7 +13,7 @@ covers both layouts seen in the wild:
   (`…/KH_6676918.p21.zip`), `Documents/Brands/TU/…` paths.
 
 It builds one flat `{path: bytes}` map (transparently unwrapping the GTC17 inner
-zips), finds the attribute `.p21` and parses it (smooth_client.importers.p21 —
+zips), finds the attribute `.p21` and parses it (loobric.importers.p21 —
 identity + geometry from readable mnemonics), then collects the product's media
 files (STEP models, images, logo) onto the draft for upload as canonical media.
 The 3D BREP geometry itself is never parsed — it is carried, not interpreted.
@@ -24,8 +24,8 @@ import zipfile
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
-from smooth_client.importers import p21
-from smooth_client.importers.base import CatalogRecordDraft, MediaFile
+from loobric.importers import p21
+from loobric.importers.base import CatalogRecordDraft, MediaFile
 
 SOURCE = "gtc-import"
 CLIENT_NAME = "import:gtc"

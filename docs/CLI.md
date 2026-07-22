@@ -1,6 +1,6 @@
-# smooth CLI
+# loobric CLI
 
-`smooth` is the command-line client for a Smooth Core server. Use it to create
+`loobric` is the command-line client for a Loobric Core server. Use it to create
 a user, manage API keys, inspect machines, catalog records and tool records,
 create tool instances, and review and resolve the binding inbox.
 
@@ -20,39 +20,39 @@ and [Match a machine and a CAM tool set you built separately](HOWTO_MATCH_MACHIN
 Install from PyPI:
 
 ```bash
-pip install loobric-smooth
+pip install loobric-cli
 ```
 
-`smooth` is then on your PATH:
+`loobric` is then on your PATH:
 
 ```bash
-smooth --help
+loobric --help
 ```
 
 Without installing the console script you can run the module directly with
-`python -m smooth_client.cli.main …`. Every command below works the same way;
+`python -m loobric.cli.main …`. Every command below works the same way;
 only the leading word changes.
 
 ## Tab-completion (optional)
 
-`smooth` can complete subcommands and flags in your shell. It uses
+`loobric` can complete subcommands and flags in your shell. It uses
 [`argcomplete`](https://github.com/kislyuk/argcomplete), which is **optional** —
 the CLI stays stdlib-only and runs fine without it; completion just switches on
 once it is installed and registered.
 
 ```bash
-pip install "loobric-smooth[completion]"     # or: pip install argcomplete
+pip install "loobric-cli[completion]"     # or: pip install argcomplete
 ```
 
 Then register it, **for the same command name you actually type**:
 
 ```bash
 # Bash — per-shell (add to ~/.bashrc to make it permanent):
-eval "$(register-python-argcomplete smooth)"        # the installed console script
+eval "$(register-python-argcomplete loobric)"        # the installed console script
 
 # Zsh — ensure bashcompinit is loaded first, then the same eval:
 autoload -U bashcompinit && bashcompinit
-eval "$(register-python-argcomplete smooth)"
+eval "$(register-python-argcomplete loobric)"
 ```
 
 Prefer global activation (completes every argcomplete-enabled script, once):
@@ -61,31 +61,31 @@ Prefer global activation (completes every argcomplete-enabled script, once):
 activate-global-python-argcomplete --user
 ```
 
-Now `smooth create-cat<TAB>` completes to `create-catalog-record`,
-`smooth create-record --<TAB>` lists `--from-catalog --name --qa --cert`, and
+Now `loobric create-cat<TAB>` completes to `create-catalog-record`,
+`loobric create-record --<TAB>` lists `--from-catalog --name --qa --cert`, and
 so on.
 
 ## How authentication works
 
-`smooth` picks credentials in this order:
+`loobric` picks credentials in this order:
 
 1. The `--api-key` flag, if given.
-2. A saved session cookie from a previous `smooth login`.
+2. A saved session cookie from a previous `loobric login`.
 3. No authentication — fine for `ping` and `register` (first user), rejected by
    everything else on a multi-tenant server.
 
 A successful `login` saves the server URL and session cookie to
-`~/.smooth/session.json` (owner-readable only). After that, you can omit
+`~/.loobric/session.json` (owner-readable only). After that, you can omit
 `--base-url` and run commands directly.
 
 ## Global options
 
-These go before the subcommand: `smooth [global options] <command> [...]`.
+These go before the subcommand: `loobric [global options] <command> [...]`.
 
 | Option | Description |
 | --- | --- |
-| `--base-url URL`, `-b URL` | Server base URL. Defaults to `$SMOOTH_BASE_URL`, then the saved session. |
-| `--api-key KEY` | Authenticate with an API key instead of a session. Overrides the session cookie and `$SMOOTH_API_KEY`. |
+| `--base-url URL`, `-b URL` | Server base URL. Defaults to `$LOOBRIC_BASE_URL`, then the saved session. |
+| `--api-key KEY` | Authenticate with an API key instead of a session. Overrides the session cookie and `$LOOBRIC_API_KEY`. |
 | `--verbose`, `-v` | Print the resolved base URL and auth source to stderr. |
 | `--login` | Shortcut for interactive login (prompts for URL, email, password). |
 | `--logout` | Shortcut to end the current session. |
@@ -93,8 +93,8 @@ These go before the subcommand: `smooth [global options] <command> [...]`.
 
 Environment variables:
 
-- `SMOOTH_BASE_URL` — default server URL.
-- `SMOOTH_API_KEY` — used **only** when you pass `--api-key "$SMOOTH_API_KEY"`;
+- `LOOBRIC_BASE_URL` — default server URL.
+- `LOOBRIC_API_KEY` — used **only** when you pass `--api-key "$LOOBRIC_API_KEY"`;
   it is not read automatically, to avoid clashing with a saved session.
 
 ## Command reference
@@ -109,7 +109,7 @@ value prints the candidates and exits.
 #### `register`
 
 ```
-smooth --base-url URL register [email] [--password PASSWORD]
+loobric --base-url URL register [email] [--password PASSWORD]
 ```
 
 Create a user account. The first account on a fresh database becomes the admin;
@@ -120,26 +120,26 @@ login command to run next.
 #### `login`
 
 ```
-smooth login [email] [--password PASSWORD] [--url URL]
+loobric login [email] [--password PASSWORD] [--url URL]
 ```
 
 Authenticate with email and password and save the session. Prompts for any
 missing value; the URL prompt defaults to `http://127.0.0.1:8000`. On success,
-prints the user and writes the session to `~/.smooth/session.json`.
+prints the user and writes the session to `~/.loobric/session.json`.
 
 #### `logout`
 
 ```
-smooth logout
+loobric logout
 ```
 
-End the current session and delete the saved session file. `smooth --logout`
+End the current session and delete the saved session file. `loobric --logout`
 does the same thing.
 
 #### `ping`
 
 ```
-smooth ping
+loobric ping
 ```
 
 Check that the server is reachable and healthy (calls `/api/health`, no auth
@@ -149,7 +149,7 @@ the server is unreachable or unhealthy.
 #### `whoami`
 
 ```
-smooth whoami
+loobric whoami
 ```
 
 Show the authenticated account: email, role, admin flag, and id. This needs a
@@ -161,7 +161,7 @@ which has no session.
 #### `create-key`
 
 ```
-smooth create-key NAME [--scopes "read write"] [--tags "production mill-3"] [--expires-at ISO8601]
+loobric create-key NAME [--scopes "read write"] [--tags "production mill-3"] [--expires-at ISO8601]
 ```
 
 Create an API key. `--scopes` and `--tags` are space-separated lists;
@@ -171,7 +171,7 @@ The plaintext key is printed to **stdout** on its own line; the human-readable
 details and warnings go to **stderr**. This lets you capture just the key:
 
 ```bash
-smooth create-key "LinuxCNC mill" --scopes "read write" > mill.key
+loobric create-key "LinuxCNC mill" --scopes "read write" > mill.key
 ```
 
 The server stores only a hash of the key, so it cannot be shown again. Save it
@@ -180,7 +180,7 @@ when it is created.
 #### `list-keys`
 
 ```
-smooth list-keys
+loobric list-keys
 ```
 
 List your API keys: id, name, scopes, tags, and created / expiry / last-used
@@ -189,7 +189,7 @@ timestamps where available. The plaintext key is never shown.
 #### `revoke-key`
 
 ```
-smooth revoke-key KEY_ID
+loobric revoke-key KEY_ID
 ```
 
 Revoke (delete) an API key by its id. Prints a confirmation.
@@ -199,7 +199,7 @@ Revoke (delete) an API key by its id. Prints a confirmation.
 #### `create-machine`
 
 ```
-smooth create-machine NAME [--controller TYPE]
+loobric create-machine NAME [--controller TYPE]
 ```
 
 Create a machine and assert its name. `--controller` records the controller type
@@ -208,7 +208,7 @@ Create a machine and assert its name. `--controller` records the controller type
 #### `list-machines`
 
 ```
-smooth list-machines
+loobric list-machines
 ```
 
 List your machines: id, name, and controller type (when set).
@@ -216,7 +216,7 @@ List your machines: id, name, and controller type (when set).
 #### `list-tools`
 
 ```
-smooth list-tools
+loobric list-tools
 ```
 
 List your tool records — the public, machine-independent view of a tool
@@ -227,7 +227,7 @@ either from a machine entry or from a [catalog record](#catalog-records).
 #### `list-tool-sets`
 
 ```
-smooth list-tool-sets
+loobric list-tool-sets
 ```
 
 List your tool sets (named collections of tool records): id, name, member count,
@@ -236,7 +236,7 @@ last-updated, and version.
 #### `tool-table`
 
 ```
-smooth tool-table MACHINE
+loobric tool-table MACHINE
 ```
 
 Show one machine's tool-table entries — the tools the controller has reported.
@@ -247,14 +247,14 @@ or `bound -> <record-prefix>`.
 #### `push`
 
 ```
-smooth push MACHINE --entry "N[:DESC[:DIA]]" [--entry ...] [--client NAME] [--snapshot]
+loobric push MACHINE --entry "N[:DESC[:DIA]]" [--entry ...] [--client NAME] [--snapshot]
 ```
 
 The controller-side tool-table sync: upsert tool-table entries on a machine by
 tool number. `MACHINE` is a machine id, name, or unique prefix. Each `--entry`
 is a tool number with an optional description and diameter (mm), e.g.
 `--entry "3:1/4 downcut:6.35"`; the flag is repeatable. `--client` stamps the
-client name on the push (default `smooth`). `--snapshot` makes the push
+client name on the push (default `loobric`). `--snapshot` makes the push
 authoritative — entries absent from it are removed — and the removed tool
 numbers are printed. Prints how many entries were pushed.
 
@@ -267,7 +267,7 @@ from that machine's tool-table entries.
 #### `create-set`
 
 ```
-smooth create-set NAME
+loobric create-set NAME
 ```
 
 Create a tool set and assert its name. Prints the new set's name and short id.
@@ -275,7 +275,7 @@ Create a tool set and assert its name. Prints the new set's name and short id.
 #### `show-tool-set`
 
 ```
-smooth show-tool-set SET
+loobric show-tool-set SET
 ```
 
 Show one tool set and its members. `SET` resolves by id, name, or unique prefix.
@@ -288,7 +288,7 @@ is the drill-in.
 #### `add-to-set`
 
 ```
-smooth add-to-set SET TOOL [TOOL ...]
+loobric add-to-set SET TOOL [TOOL ...]
 ```
 
 Add one or more tool records to a set. `SET` and each `TOOL` resolve by id,
@@ -300,7 +300,7 @@ the tools added and the resulting member count.
 #### `remove-from-set`
 
 ```
-smooth remove-from-set SET TOOL [TOOL ...]
+loobric remove-from-set SET TOOL [TOOL ...]
 ```
 
 Remove one or more tool records from a set; the rest are kept. `SET` and each
@@ -314,7 +314,7 @@ resulting member count.
 #### `link-machine`
 
 ```
-smooth link-machine SET MACHINE
+loobric link-machine SET MACHINE
 ```
 
 Link a tool set to a machine so its member numbers are inherited from that
@@ -336,7 +336,7 @@ duplicate.
 #### `create-catalog-record`
 
 ```
-smooth create-catalog-record [- | FILE] --source ACTOR [--file FILE]
+loobric create-catalog-record [- | FILE] --source ACTOR [--file FILE]
                               [--name NAME] [--manufacturer MFR]
                               [--product-code CODE] [--diameter MM] [--flutes N]
 ```
@@ -352,11 +352,11 @@ carries values and units only (never provenance):
 ```bash
 # JSON on stdin, identity by flag:
 echo '{"geometry": {"diameter": {"value": 6.35, "unit": "mm"}, "flutes": {"value": 2}}}' \
-  | smooth create-catalog-record - --source manufacturer:kennametal \
+  | loobric create-catalog-record - --source manufacturer:kennametal \
       --name "1/4 downcut" --manufacturer Kennametal --product-code KC-0250
 
 # entirely from flags:
-smooth create-catalog-record --source manufacturer:kennametal \
+loobric create-catalog-record --source manufacturer:kennametal \
     --name "1/4 downcut" --manufacturer Kennametal --product-code KC-0250 \
     --diameter 6.35 --flutes 2
 ```
@@ -366,7 +366,7 @@ Prints the new record's name and short id, noting the stamped source.
 #### `list-catalog-records`
 
 ```
-smooth list-catalog-records
+loobric list-catalog-records
 ```
 
 List your catalog records: id, name, the `manufacturer  product_code` identity,
@@ -375,7 +375,7 @@ and nominal diameter when present.
 #### `show-catalog-record`
 
 ```
-smooth show-catalog-record CATALOG
+loobric show-catalog-record CATALOG
 ```
 
 Show one catalog record with **full provenance** — every canonical field (name,
@@ -388,7 +388,7 @@ unique prefix, name, or product code.
 #### `import`
 
 ```
-smooth import FILE [--dry-run] [--no-preserve] [--source ACTOR]
+loobric import FILE [--dry-run] [--no-preserve] [--source ACTOR]
 ```
 
 Import tool data from a known vendor format into catalog records. The format is
@@ -415,13 +415,13 @@ duplicated.
 
 ```
 # See exactly what would be created, without sending anything:
-smooth import 6767731.csv --dry-run
+loobric import 6767731.csv --dry-run
 
 # Import a DIN 4000 export (a session/base URL must be configured):
-smooth import 6767731.xml --source manufacturer:kennametal
+loobric import 6767731.xml --source manufacturer:kennametal
 
 # Import a GTC package — creates the record and uploads its 3D models + images:
-smooth import 6676918.zip
+loobric import 6676918.zip
 ```
 
 `--dry-run` parses offline and prints the canonical fields per record. `--source`
@@ -435,7 +435,7 @@ propose a match. These proposals collect in the inbox.
 #### `pending`
 
 ```
-smooth pending
+loobric pending
 ```
 
 List inbox items awaiting review. For each: a short item id, the machine entry
@@ -446,7 +446,7 @@ resolving it overwrites nothing on either side.
 #### `resolve`
 
 ```
-smooth resolve ITEM_ID {confirm|reject}
+loobric resolve ITEM_ID {confirm|reject}
 ```
 
 Resolve one inbox item. `ITEM_ID` is the item id or a unique prefix from
@@ -469,7 +469,7 @@ between them.
 #### `bind`
 
 ```
-smooth bind MACHINE TOOL_NUMBER RECORD
+loobric bind MACHINE TOOL_NUMBER RECORD
 ```
 
 Link an entry to an existing tool record. `MACHINE` and `RECORD` accept an id,
@@ -478,7 +478,7 @@ name, or unique prefix; `TOOL_NUMBER` is the integer tool number (e.g. `3`).
 #### `unbind`
 
 ```
-smooth unbind MACHINE TOOL_NUMBER
+loobric unbind MACHINE TOOL_NUMBER
 ```
 
 Unbind an entry. The entry keeps its data and becomes eligible for future match
@@ -487,8 +487,8 @@ suggestions again.
 #### `create-record`
 
 ```
-smooth create-record MACHINE TOOL_NUMBER [--name NAME]
-smooth create-record --from-catalog CATALOG [--name NAME] [--qa FILE --cert SERIAL]
+loobric create-record MACHINE TOOL_NUMBER [--name NAME]
+loobric create-record --from-catalog CATALOG [--name NAME] [--qa FILE --cert SERIAL]
 ```
 
 Context-aware: it creates a tool instance from one of two sources, and the
@@ -525,7 +525,7 @@ in a non-interactive shell (no TTY) `--yes` is required.
 #### `delete-entry`
 
 ```
-smooth delete-entry MACHINE TOOL_NUMBER [--yes]
+loobric delete-entry MACHINE TOOL_NUMBER [--yes]
 ```
 
 Remove a machine-reported tool-table entry. If the controller reports it again,
@@ -534,7 +534,7 @@ it returns.
 #### `delete-tool`
 
 ```
-smooth delete-tool RECORD [--yes]
+loobric delete-tool RECORD [--yes]
 ```
 
 Delete a tool record. Any entries bound to it are unbound (not orphaned); their
@@ -543,7 +543,7 @@ data stays on the machine.
 #### `delete-machine`
 
 ```
-smooth delete-machine MACHINE [--yes]
+loobric delete-machine MACHINE [--yes]
 ```
 
 Delete a machine and its tool-table entries. Tool records are not affected.
@@ -553,7 +553,7 @@ Delete a machine and its tool-table entries. Tool records are not affected.
 #### `assert`
 
 ```
-smooth assert RESOURCE RECORD_ID PATH VALUE
+loobric assert RESOURCE RECORD_ID PATH VALUE
 ```
 
 Set a canonical field directly — the canonical "assert" door. `RESOURCE` is a
@@ -563,7 +563,7 @@ new value. `VALUE` is JSON-parsed when possible (so numbers, booleans, and JSON
 objects work), otherwise it is treated as a plain string. For example:
 
 ```bash
-smooth assert tool-set-records <id> name "Aluminum job"
+loobric assert tool-set-records <id> name "Aluminum job"
 ```
 
 ### Admin and housekeeping
@@ -571,7 +571,7 @@ smooth assert tool-set-records <id> name "Aluminum job"
 #### `audit`
 
 ```
-smooth audit [--limit N]
+loobric audit [--limit N]
 ```
 
 Show recent audit-log entries — operation, entity type, short entity id, and
@@ -580,7 +580,7 @@ time, one per line. `--limit` caps how many are shown (default 50).
 #### `reset`
 
 ```
-smooth reset [--yes]
+loobric reset [--yes]
 ```
 
 Wipe **all** tool data for the account — records, sets, machines, and
@@ -591,7 +591,7 @@ shell). Prints how many items were deleted.
 #### `backup-export`
 
 ```
-smooth backup-export [--out FILE]
+loobric backup-export [--out FILE]
 ```
 
 Export a full account backup as JSON (admin). Writes to `--out FILE` when given,
@@ -600,7 +600,7 @@ otherwise to stdout.
 #### `backup-import`
 
 ```
-smooth backup-import FILE
+loobric backup-import FILE
 ```
 
 Restore an account backup from a JSON file (admin). `FILE` is the path to a
@@ -616,15 +616,15 @@ server, and you decide what it is. It assumes you have a running server (see
 
 On the shop floor, an operator measures tool 3 and the controller's tool table
 gets a new entry. A client such as
-[smooth-linuxcnc](https://github.com/loobric/smooth-linuxcnc) syncs that entry
+[loobric-linuxcnc](https://github.com/loobric/loobric-linuxcnc) syncs that entry
 up to the server. Nothing for you to type here — this is the event that starts
 the workflow.
 
 ### 2. See what the machine reported
 
 ```bash
-smooth list-machines
-smooth tool-table <machine>
+loobric list-machines
+loobric tool-table <machine>
 ```
 
 The new entry shows up as `unbound`:
@@ -638,7 +638,7 @@ T3: 1/4" downcut  ⌀6.35  [unbound]
 If the server found a likely match for T3, it proposes one:
 
 ```bash
-smooth pending
+loobric pending
 ```
 
 ```
@@ -653,13 +653,13 @@ smooth pending
 If the proposal is right, confirm it. T3 is now linked to that record:
 
 ```bash
-smooth resolve 4f2a confirm
+loobric resolve 4f2a confirm
 ```
 
 If it is wrong (or you are unsure), reject it. T3 stays unbound:
 
 ```bash
-smooth resolve 4f2a reject
+loobric resolve 4f2a reject
 ```
 
 ### 5. No proposal? Bind or create a record by hand
@@ -670,34 +670,34 @@ no proposal, you have two choices.
 If a matching record already exists, link to it:
 
 ```bash
-smooth list-tools                 # find the record id
-smooth bind <machine> 3 <record>
+loobric list-tools                 # find the record id
+loobric bind <machine> 3 <record>
 ```
 
 If no record exists yet, promote the entry into a new record in one step:
 
 ```bash
-smooth create-record <machine> 3 --name "1/4 downcut"
+loobric create-record <machine> 3 --name "1/4 downcut"
 ```
 
 ### 6. Confirm the result
 
 ```bash
-smooth tool-table <machine>
+loobric tool-table <machine>
 ```
 
 T3 now reads `bound -> <record>`. From here, changes on either side route
 between the entry and the record. If you ever got it wrong, `unbind <machine> 3`
 puts the entry back to `unbound` without losing its data.
 
-## Using loobric-smooth as a library
+## Using loobric-cli as a library
 
-`loobric-smooth` is MIT-licensed and importable. The same `Client` class the CLI
+`loobric-cli` is MIT-licensed and importable. The same `Client` class the CLI
 uses is the reference implementation other Python clients (FreeCAD, etc.) reuse,
 so you don't have to write your own HTTP client:
 
 ```python
-from smooth_client import Client, NotFound, SmoothClientError
+from loobric import Client, NotFound, LoobricClientError
 
 c = Client(base_url="http://nas:8000", api_key="…")   # solo mode: api_key optional
 
@@ -712,7 +712,7 @@ except NotFound:
     ...
 ```
 
-Client methods return parsed data and raise `SmoothClientError` subclasses on
+Client methods return parsed data and raise `LoobricClientError` subclasses on
 failure — `NotFound`, `AuthRequired`, `HTTPError`, and `ConnectionFailed` — so
 callers handle errors instead of parsing printed output. The library is
-stdlib-only, so `pip install loobric-smooth` adds no third-party dependencies.
+stdlib-only, so `pip install loobric-cli` adds no third-party dependencies.

@@ -13,10 +13,10 @@ from pathlib import Path
 
 import pytest
 
-from smooth_client import importers
-from smooth_client.errors import HTTPError
-from smooth_client.importers import gtc, p21
-from smooth_client.importers.run import import_drafts
+from loobric import importers
+from loobric.errors import HTTPError
+from loobric.importers import gtc, p21
+from loobric.importers.run import import_drafts
 
 FIXTURES = Path(__file__).parent / "fixtures" / "importers"
 P21_TEXT = (FIXTURES / "iso13399.p21").read_text()
@@ -170,8 +170,8 @@ def test_driver_media_failure_is_reported_not_fatal(tmp_path):
 def test_client_upload_media_builds_multipart_post(monkeypatch):
     """The real Client.upload_media posts a well-formed multipart body to the
     record's media endpoint (FakeClient bypasses this construction)."""
-    import smooth_client.transport as transport
-    from smooth_client.client import Client
+    import loobric.transport as transport
+    from loobric.client import Client
 
     seen = {}
 

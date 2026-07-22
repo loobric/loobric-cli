@@ -13,8 +13,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
-from smooth_client.importers._util import assign, num_leaf
-from smooth_client.importers.base import CatalogRecordDraft
+from loobric.importers._util import assign, num_leaf
+from loobric.importers.base import CatalogRecordDraft
 
 SOURCE = "solidcam-import"
 CLIENT_NAME = "import:solidcam"

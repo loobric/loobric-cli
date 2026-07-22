@@ -1,7 +1,7 @@
 # MIT License
 # Copyright (c) 2025 sliptonic
 # SPDX-License-Identifier: MIT
-"""Drive an importer's drafts into a Smooth server through the public API.
+"""Drive an importer's drafts into a Loobric server through the public API.
 
 Each draft becomes a ``ToolCatalogRecord`` via ``create_catalog_record`` — the
 server stamps ``asserted:<source>`` on every canonical field; the client never
@@ -14,7 +14,7 @@ duplicated.
 from dataclasses import dataclass, field
 from typing import Any, Callable, List, Optional, Tuple
 
-from smooth_client.errors import HTTPError, SmoothClientError
+from loobric.errors import HTTPError, LoobricClientError
 
 
 @dataclass
@@ -60,7 +60,7 @@ def import_drafts(client, drafts, *, source: Optional[str] = None,
                 report.failed.append((draft, e))
                 _emit(on_event, "fail", draft, e)
             continue
-        except SmoothClientError as e:
+        except LoobricClientError as e:
             report.failed.append((draft, e))
             _emit(on_event, "fail", draft, e)
             continue
@@ -78,7 +78,7 @@ def import_drafts(client, drafts, *, source: Optional[str] = None,
                     data={"format": draft.source_format,
                           "class": draft.source_class,
                           "properties": draft.raw})
-            except SmoothClientError as e:
+            except LoobricClientError as e:
                 report.preserve_failed.append((draft, e))
                 _emit(on_event, "preserve_fail", draft, e)
 
@@ -87,7 +87,7 @@ def import_drafts(client, drafts, *, source: Optional[str] = None,
                 client.upload_media("tool-catalog-records", rid, data=mf.data,
                                     filename=mf.filename, role=mf.role,
                                     content_type=mf.content_type, actor=actor)
-            except SmoothClientError as e:
+            except LoobricClientError as e:
                 report.media_failed.append((draft, mf, e))
                 _emit(on_event, "media_fail", draft, mf)
             else:

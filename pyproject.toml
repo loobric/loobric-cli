@@ -1,7 +1,7 @@
 [project]
-name = "loobric-smooth"
+name = "loobric-cli"
 version = "0.5.1"
-description = "Python client library and CLI for Smooth Core (CNC tool-data sync)."
+description = "Python client library and CLI for Loobric Core (CNC tool-data sync)."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -20,22 +20,22 @@ dependencies = []
 [project.optional-dependencies]
 # DIN 4000 import (CSV + XML) is stdlib-only and ships in the base install. This
 # extra is for formats that need heavier parsers — GTC/ISO 13399 P21 (steputils),
-# large-XML XSD validation (lxml), etc. (see smooth-core#31 and docs/IMPORTERS_PLAN.md).
+# large-XML XSD validation (lxml), etc. (see loobric-core#31 and docs/IMPORTERS_PLAN.md).
 importers = ["lxml>=5.0"]
 completion = ["argcomplete>=3.0"]
 dev = ["pytest>=7.4"]
 
 [project.scripts]
-smooth = "smooth_client.cli.main:main"
+loobric = "loobric.cli.main:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["smooth_client*"]
+include = ["loobric*"]
 
 [project.urls]
-Homepage = "https://github.com/loobric/loobric-smooth"
-Repository = "https://github.com/loobric/loobric-smooth"
-Issues = "https://github.com/loobric/loobric-smooth/issues"
+Homepage = "https://github.com/loobric/loobric-cli"
+Repository = "https://github.com/loobric/loobric-cli"
+Issues = "https://github.com/loobric/loobric-cli/issues"

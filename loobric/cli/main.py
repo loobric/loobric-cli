@@ -3,9 +3,9 @@
 # MIT License
 # Copyright (c) 2025 sliptonic
 # SPDX-License-Identifier: MIT
-"""Smooth client CLI — an argparse shell over smooth_client.Client.
+"""Loobric client CLI — an argparse shell over loobric.Client.
 
-The universal command-line client: `smooth <verb>`. Commands build a Client from
+The universal command-line client: `loobric <verb>`. Commands build a Client from
 the CLI's current config (transport.BASE_URL / API_KEY / session) so they
 exercise the same library other clients import.
 """
@@ -16,10 +16,10 @@ import os
 import sys
 from typing import Any, Dict, List, Optional
 
-from smooth_client import transport
-from smooth_client.client import Client
-from smooth_client.errors import (
-    AuthRequired, ConnectionFailed, HTTPError, NotFound, SmoothClientError,
+from loobric import transport
+from loobric.client import Client
+from loobric.errors import (
+    AuthRequired, ConnectionFailed, HTTPError, NotFound, LoobricClientError,
 )
 
 
@@ -69,7 +69,7 @@ def register(email: str = None, password: str = None):
     if data.get('id'):
         print(f"  User ID: {data.get('id')}")
     print("\nYou can now login with:")
-    print(f"  smooth login {email}")
+    print(f"  loobric login {email}")
 
 
 def login(email: str = None, password: str = None, base_url: str = None):
@@ -152,7 +152,7 @@ def create_key(
         print(f"  Expires: {data.get('expires_at')}", file=sys.stderr)
     print("\n⚠ Warning: Save the key now — it won't be shown again!", file=sys.stderr)
     print("\nTo use this key, set the environment variable:", file=sys.stderr)
-    print(f"  export SMOOTH_API_KEY={data.get('key')}", file=sys.stderr)
+    print(f"  export LOOBRIC_API_KEY={data.get('key')}", file=sys.stderr)
 
 
 def list_keys():
@@ -228,7 +228,7 @@ def show_tool_set(set_handle):
         print("  Machine: not linked")
     print(f"  Members: {len(members)}")
     if not members:
-        print("  (none yet — add tools with 'smooth add-to-set')")
+        print("  (none yet — add tools with 'loobric add-to-set')")
         print("=" * 78)
         return
     tools = {_rid(t): t for t in _client().list_tool_records()}
@@ -304,7 +304,7 @@ def list_pending():
         print(f"  Proposed match: {proposed.get('name')}")
         print(f"  Confidence: {item.get('confidence'):.0%} - {item.get('reason')}")
         print("-" * 78)
-    print("Resolve with: smooth resolve <id> confirm|reject")
+    print("Resolve with: loobric resolve <id> confirm|reject")
 
 
 def resolve_pending(item_id: str, action: str):
@@ -819,8 +819,8 @@ def import_tools(path, source=None, dry_run=False, no_preserve=False):
     offline; --dry-run shows exactly what would be created without sending. Each
     record's full source payload is preserved in its client section unless
     --no-preserve is given."""
-    from smooth_client import importers
-    from smooth_client.importers.run import import_drafts
+    from loobric import importers
+    from loobric.importers.run import import_drafts
 
     try:
         drafts = importers.parse(path)
@@ -1107,7 +1107,7 @@ def _client_version() -> str:
     try:
         from importlib.metadata import version, PackageNotFoundError
         try:
-            return version("loobric-smooth")
+            return version("loobric-cli")
         except PackageNotFoundError:
             return "unknown"
     except Exception:
@@ -1120,9 +1120,9 @@ def show_version():
     Unlike `whoami`, this needs no authentication: the server's build comes from
     the unauthenticated /version endpoint. It's the quickest 'are my client and
     server compatible / is my deploy current?' check."""
-    print(f"  Client: loobric-smooth {_client_version()}")
+    print(f"  Client: loobric-cli {_client_version()}")
     if not transport.BASE_URL:
-        print("  Server: (no base URL set — pass --base-url or set SMOOTH_BASE_URL)")
+        print("  Server: (no base URL set — pass --base-url or set LOOBRIC_BASE_URL)")
         return
     try:
         v = _client().server_version()
@@ -1131,7 +1131,7 @@ def show_version():
     except NotFound:
         print(f"  Server: unknown — older server with no /version endpoint  "
               f"[{transport.BASE_URL}]")
-    except SmoothClientError as e:
+    except LoobricClientError as e:
         print(f"  Server: unreachable  [{transport.BASE_URL}]  ({e})")
 
 
@@ -1218,7 +1218,7 @@ def backup_import(path):
 
 
 def assert_canonical(resource, record_id, path, value, actor="human@cli"):
-    """Assert a canonical field (the assert door): smooth assert <resource> <id> <path> <value>."""
+    """Assert a canonical field (the assert door): loobric assert <resource> <id> <path> <value>."""
     try:
         parsed = json.loads(value)
     except (json.JSONDecodeError, TypeError):
@@ -1278,7 +1278,7 @@ def _run(fn, *args, **kwargs):
     The library raises; the CLI shell is where that becomes user-facing output."""
     try:
         return fn(*args, **kwargs)
-    except SmoothClientError as e:
+    except LoobricClientError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -1286,73 +1286,73 @@ def _run(fn, *args, **kwargs):
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Smooth API Key Management CLI",
+        description="Loobric API Key Management CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   # First time setup - register a user on fresh database
-  smooth --base-url http://127.0.0.1:8000 register admin@example.com
+  loobric --base-url http://127.0.0.1:8000 register admin@example.com
   
   # Interactive login (prompts for URL, email, password)
-  smooth --login
+  loobric --login
   
   # Login with specific URL and email
-  smooth --base-url http://127.0.0.1:8000 login user@example.com
+  loobric --base-url http://127.0.0.1:8000 login user@example.com
   
   # After login, base URL is saved - just run commands
-  smooth list-keys
-  smooth create-key "My Key" --scopes "read write:items"
+  loobric list-keys
+  loobric create-key "My Key" --scopes "read write:items"
   
   # Create a key with tags and expiration
-  smooth create-key "Backup Script" \\
+  loobric create-key "Backup Script" \\
     --scopes "read" --tags "backup production" --expires-at "2025-12-31T23:59:59Z"
   
   # Revoke an API key
-  smooth revoke-key <key_id>
+  loobric revoke-key <key_id>
 
   # The sync loop, end to end (machine ids/names accept unique prefixes)
-  smooth create-machine millstone --controller linuxcnc
-  smooth push millstone --entry "3:1/4 downcut:6.35" --entry "7:vee:6.0"
-  smooth tool-table millstone
-  smooth create-record millstone 3 --name "1/4 downcut"   # mint + bind T3
-  smooth bind millstone 7 <record>     # or bind an existing record
-  smooth unbind millstone 7
+  loobric create-machine millstone --controller linuxcnc
+  loobric push millstone --entry "3:1/4 downcut:6.35" --entry "7:vee:6.0"
+  loobric tool-table millstone
+  loobric create-record millstone 3 --name "1/4 downcut"   # mint + bind T3
+  loobric bind millstone 7 <record>     # or bind an existing record
+  loobric unbind millstone 7
 
   # Catalog records -> a physical instance (unbound: not in any machine yet)
-  smooth create-record --from-catalog B201            # by product code
-  smooth create-record --from-catalog B201 --name "1/4 downcut, lot 7"
-  smooth create-record --from-catalog B201 \\
+  loobric create-record --from-catalog B201            # by product code
+  loobric create-record --from-catalog B201 --name "1/4 downcut, lot 7"
+  loobric create-record --from-catalog B201 \\
     --qa qa.json --cert "kennametal@SN12345"           # + manufacturer QA
 
   # Inspect (list, then drill into one by id / unique prefix / name)
-  smooth list-machines
-  smooth show-machine millstone        # + its tool table and linked sets
-  smooth list-tools
-  smooth show-tool "1/4 downcut"       # one instance with full provenance
-  smooth list-tool-sets
-  smooth show-tool-set "Aluminum job"
-  smooth list-keys
-  smooth show-key <key_id>             # one API key (id/prefix/name)
-  smooth pending                       # binding proposals awaiting review
-  smooth audit --limit 20
+  loobric list-machines
+  loobric show-machine millstone        # + its tool table and linked sets
+  loobric list-tools
+  loobric show-tool "1/4 downcut"       # one instance with full provenance
+  loobric list-tool-sets
+  loobric show-tool-set "Aluminum job"
+  loobric list-keys
+  loobric show-key <key_id>             # one API key (id/prefix/name)
+  loobric pending                       # binding proposals awaiting review
+  loobric audit --limit 20
 
   # Tool sets
-  smooth create-set "Aluminum job"
-  smooth link-machine "Aluminum job" millstone
+  loobric create-set "Aluminum job"
+  loobric link-machine "Aluminum job" millstone
 
   # Canonical assert door
-  smooth assert tool-set-records <id> name "Aluminum job v2"
+  loobric assert tool-set-records <id> name "Aluminum job v2"
 
   # Admin / housekeeping
-  smooth reset --yes                   # wipe all tool data (keeps login + keys)
-  smooth backup-export --out backup.json
-  smooth backup-import backup.json
-  smooth delete-machine millstone --yes
-  smooth ping
-  smooth logout
+  loobric reset --yes                   # wipe all tool data (keeps login + keys)
+  loobric backup-export --out backup.json
+  loobric backup-import backup.json
+  loobric delete-machine millstone --yes
+  loobric ping
+  loobric logout
 
 Environment Variables:
-  SMOOTH_BASE_URL - Default base URL (can override with --base-url)
-  SMOOTH_API_KEY  - API key for authentication (alternative to login)
+  LOOBRIC_BASE_URL - Default base URL (can override with --base-url)
+  LOOBRIC_API_KEY  - API key for authentication (alternative to login)
 """
     )
     parser.add_argument(
@@ -1367,12 +1367,12 @@ Environment Variables:
     )
     parser.add_argument(
         "--api-key",
-        help="API key for authentication (overrides session cookie and $SMOOTH_API_KEY)"
+        help="API key for authentication (overrides session cookie and $LOOBRIC_API_KEY)"
     )
     parser.add_argument(
         "--base-url", "-b",
-        default=os.environ.get("SMOOTH_BASE_URL"),
-        help="Base API URL (default: $SMOOTH_BASE_URL or saved session)"
+        default=os.environ.get("LOOBRIC_BASE_URL"),
+        help="Base API URL (default: $LOOBRIC_BASE_URL or saved session)"
     )
     parser.add_argument(
         "--verbose", "-v",
@@ -1862,7 +1862,7 @@ Environment Variables:
     # Handle --logout shortcut
     if args.logout:
         # Load session to get transport.BASE_URL for logout request
-        transport.API_KEY = os.environ.get("SMOOTH_API_KEY")
+        transport.API_KEY = os.environ.get("LOOBRIC_API_KEY")
         if not transport.API_KEY:
             session_data = transport.load_session()
         _run(logout)
@@ -1875,15 +1875,15 @@ Environment Variables:
     # Load session first (for session-based auth)
     session_data = transport.load_session()
     
-    # API key precedence: --api-key flag > SMOOTH_API_KEY env > saved session
-    # cookie. The env var makes the create-key "export SMOOTH_API_KEY=…" advice
+    # API key precedence: --api-key flag > LOOBRIC_API_KEY env > saved session
+    # cookie. The env var makes the create-key "export LOOBRIC_API_KEY=…" advice
     # actually take effect without repeating --api-key on every command — the
     # right default for a sandbox, where sessions die on each redeploy but API
     # keys persist. A flag still wins; the transport prefers a key over a cookie.
     if args.api_key:
         transport.API_KEY = args.api_key
-    elif os.environ.get("SMOOTH_API_KEY"):
-        transport.API_KEY = os.environ["SMOOTH_API_KEY"]
+    elif os.environ.get("LOOBRIC_API_KEY"):
+        transport.API_KEY = os.environ["LOOBRIC_API_KEY"]
 
     # Validate transport.BASE_URL is set. `version` is exempt: it reports the
     # client version with or without a server, and shows the server build only
@@ -1891,15 +1891,15 @@ Environment Variables:
     if not transport.BASE_URL and getattr(args, "command", None) != "version":
         print("Error: Base URL required. Set it once and every command targets "
               "that server, e.g.:\n"
-              "  export SMOOTH_BASE_URL=https://api.loobric.com\n"
-              "or pass --base-url <url>, or run 'smooth --login' first.",
+              "  export LOOBRIC_BASE_URL=https://api.loobric.com\n"
+              "or pass --base-url <url>, or run 'loobric --login' first.",
               file=sys.stderr)
         sys.exit(1)
     
     if args.verbose:
         print(f"Base URL: {transport.BASE_URL}", file=sys.stderr)
         if transport.API_KEY:
-            src = "--api-key flag" if args.api_key else "$SMOOTH_API_KEY"
+            src = "--api-key flag" if args.api_key else "$LOOBRIC_API_KEY"
             print(f"Using API key from {src}", file=sys.stderr)
         elif transport.SESSION_COOKIE:
             print(f"Using saved session from {transport.SESSION_FILE}", file=sys.stderr)

@@ -1,7 +1,7 @@
 # MIT License
 # Copyright (c) 2025 sliptonic
 # SPDX-License-Identifier: MIT
-"""Tests for the admin account-roster verb (`smooth list-users`).
+"""Tests for the admin account-roster verb (`loobric list-users`).
 
 list_users() is a thin door onto GET /api/v1/admin/users — the read-only
 "how many accounts exist, and who are they?" roster. We inject a fake transport
@@ -9,7 +9,7 @@ and assert the method/endpoint it emits, and that an older server (NotFound)
 propagates so the CLI can report it cleanly."""
 import pytest
 
-from smooth_client import Client, NotFound
+from loobric import Client, NotFound
 
 
 def test_list_users_hits_admin_users_endpoint():

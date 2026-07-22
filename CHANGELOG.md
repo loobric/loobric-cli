@@ -1,61 +1,61 @@
 # Changelog
 
-All notable changes to **loobric-smooth** (the Smooth client library + `smooth` CLI)
+All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [0.5.1] — 2026-06-29
 
 ### Added
-- **`smooth list-users`** — the admin account roster (and `Client.list_users()`
+- **`loobric list-users`** — the admin account roster (and `Client.list_users()`
   library method). Lists how many accounts exist and who they are (email, role,
-  flags, API-key count, created date), newest first, over smooth-core's
+  flags, API-key count, created date), newest first, over loobric-core's
   `GET /api/v1/admin/users`. Admin-only on the server; an older server with no
   such endpoint reports it plainly instead of erroring. No secrets are shown —
-  never a password hash or key material. Needs smooth-core ≥ 0.3.5.
+  never a password hash or key material. Needs loobric-core ≥ 0.3.5.
 
 ## [0.5.0] — 2026-06-27
 
 ### Added
-- **`smooth version`** — print this client's version and the server's build,
+- **`loobric version`** — print this client's version and the server's build,
   with **no login required** (the server build comes from the unauthenticated
   `/version` endpoint). The quickest "are my client and server compatible / is
   my deploy current?" check. Works even with no server configured (shows the
   client version alone). Previously the server build was only visible via
-  `smooth whoami`, which requires authentication.
-- **`smooth change-password`** — change the authenticated user's password
+  `loobric whoami`, which requires authentication.
+- **`loobric change-password`** — change the authenticated user's password
   (prompts for the current and new password, or takes `--current`/`--new`).
   Wraps the existing `POST /auth/change-password` endpoint, which had no CLI verb.
-- **`smooth wipe-all`** — ADMIN factory reset: delete ALL data, ALL accounts, and
+- **`loobric wipe-all`** — ADMIN factory reset: delete ALL data, ALL accounts, and
   ALL API keys on the server, **including the calling admin**. Guarded by an exact
   typed (or `--confirm`ed) phrase; there is no undo. After it runs the server is
   empty and the next registration becomes the new admin. Requires
-  smooth-core ≥ 0.3.2 (new `POST /api/v1/admin/wipe` endpoint).
-  Distinct from `smooth reset`, which wipes only your tool data and keeps accounts.
+  loobric-core ≥ 0.3.2 (new `POST /api/v1/admin/wipe` endpoint).
+  Distinct from `loobric reset`, which wipes only your tool data and keeps accounts.
 
 ## [0.4.0] — 2026-06-26
 
 ### Added
-- **`examples/quickstart.sh`** — a readable shell script of plain `smooth`
+- **`examples/quickstart.sh`** — a readable shell script of plain `loobric`
   commands that seeds an account with a small demo (a handful of endmills,
   drills, a V-bit, a face mill, across two plausible manufacturers) and walks
   the whole loop: machine → catalog → instance → tool set → tool-table push.
   Run it to populate a fresh or sandbox account; read it to learn how to script
-  the CLI. (No new `smooth` subcommand — it's just the commands you'd type.)
+  the CLI. (No new `loobric` subcommand — it's just the commands you'd type.)
 - **`docs/SANDBOX.md`** — an API-key-first walkthrough for the free hosted
   sandbox at `https://api.loobric.com`.
 
 ### Changed
-- **`SMOOTH_API_KEY` is now read from the environment automatically.** Export it
+- **`LOOBRIC_API_KEY` is now read from the environment automatically.** Export it
   once (as `create-key` already advises) and every command authenticates with
   the key — no need to repeat `--api-key`. Precedence is `--api-key` flag >
-  `SMOOTH_API_KEY` env > saved session cookie. This is the right default for the
+  `LOOBRIC_API_KEY` env > saved session cookie. This is the right default for the
   sandbox, where login sessions are dropped on each server redeploy but API keys
   persist.
-- **`smooth register` now pins the server it ran against** (saves `base_url` to
-  `~/.smooth/session.json`), so the next command targets the same server without
+- **`loobric register` now pins the server it ran against** (saves `base_url` to
+  `~/.loobric/session.json`), so the next command targets the same server without
   re-passing `--base-url`.
 - The "Base URL required" error now names the one-liner to fix it
-  (`export SMOOTH_BASE_URL=…`).
+  (`export LOOBRIC_BASE_URL=…`).
 
 ## [0.3.0] — 2026-06-23
 
@@ -69,7 +69,7 @@ are recorded here. This project adheres to [Semantic Versioning](https://semver.
 ## [0.2.0] — 2026-06-22
 
 ### Added
-- **`smooth import` — tool-data importers.** One command auto-detects the format
+- **`loobric import` — tool-data importers.** One command auto-detects the format
   and turns a vendor export into catalog records on the server. Supported:
   - **DIN 4000** — CSV and XML (ToolsUnited 2013 & 2016 editions, incl. the
     decimal-comma variant).
@@ -83,7 +83,7 @@ are recorded here. This project adheres to [Semantic Versioning](https://semver.
     `--no-preserve` skips storing the raw source payload.
 - **`Client.upload_media()`** — attach a file (3D model, drawing, image) to a
   record's canonical media (stdlib multipart).
-- Importers are an opt-in subpackage (`smooth_client.importers`) with a public
+- Importers are an opt-in subpackage (`loobric.importers`) with a public
   `parse()` entry point returning `CatalogRecordDraft`s.
 
 ### Design
@@ -99,6 +99,6 @@ are recorded here. This project adheres to [Semantic Versioning](https://semver.
 ## [0.1.0]
 
 ### Added
-- Initial extraction of the Smooth client from the single-file `loobric.py`: the
-  importable `smooth_client.Client` library and the `smooth` CLI, plus PyPI
+- Initial extraction of the Loobric client from the single-file `loobric.py`: the
+  importable `loobric.Client` library and the `loobric` CLI, plus PyPI
   packaging (Trusted Publishing) and CI.

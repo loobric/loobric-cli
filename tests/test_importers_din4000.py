@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from smooth_client.errors import HTTPError
-from smooth_client.importers import din4000
-from smooth_client.importers.base import CatalogRecordDraft
-from smooth_client.importers.run import import_drafts
+from loobric.errors import HTTPError
+from loobric.importers import din4000
+from loobric.importers.base import CatalogRecordDraft
+from loobric.importers.run import import_drafts
 
 FIXTURES = Path(__file__).parent / "fixtures" / "importers"
 CSV = FIXTURES / "din4000-82.csv"
@@ -87,7 +87,7 @@ def test_endmill_guard_no_inference_beyond_mapped_codes():
 def test_unknown_class_asserts_nothing():
     """A class with no verified mapping yields no canonical fields and no shape —
     the raw is still preserved, but we never guess. (The endmill bug, prevented.)"""
-    from smooth_client.importers.din4000 import _codes
+    from loobric.importers.din4000 import _codes
     fields = _codes.to_fields("DIN4000-99", {"A1": "5.0", "J23": "Mystery tool"})
     assert fields == {}
 

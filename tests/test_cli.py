@@ -1,19 +1,19 @@
 # MIT License
 # Copyright (c) 2025 sliptonic
 # SPDX-License-Identifier: MIT
-"""Regression suite for the Smooth client CLI (smooth_client.cli.main).
+"""Regression suite for the Loobric client CLI (loobric.cli.main).
 
-Mocks ``smooth_client.transport.make_request`` and asserts the HTTP method +
+Mocks ``loobric.transport.make_request`` and asserts the HTTP method +
 path each command hits (so a path regressing to a retired endpoint fails loudly)
 and that the CLI parses the three-section response shape ({internal, canonical,
-clients}). Ported from smooth-core's test_loobric_cli.py.
+clients}). Ported from loobric-core's test_loobric_cli.py.
 """
 import json
 
 import pytest
 
-import smooth_client.cli.main as cli
-import smooth_client.transport as transport
+import loobric.cli.main as cli
+import loobric.transport as transport
 
 
 # Canned v2 sectioned records (the shape the live routers actually emit).
@@ -822,7 +822,7 @@ def test_version_shows_client_and_server(api, capsys, monkeypatch):
     monkeypatch.setattr(transport, "BASE_URL", "http://nas:8000")
     cli.show_version()
     out = capsys.readouterr().out
-    assert "Client: loobric-smooth" in out               # the installed client version
+    assert "Client: loobric-cli" in out               # the installed client version
     assert "Server: 0.1.0 (abc123def456)" in out         # Recorder's /version payload
     assert any(c["endpoint"] == "/version" for c in api.of("GET"))
 
@@ -831,7 +831,7 @@ def test_version_without_base_url_is_graceful(monkeypatch, capsys):
     monkeypatch.setattr(transport, "BASE_URL", "")
     cli.show_version()                                    # must not raise or call out
     out = capsys.readouterr().out
-    assert "Client: loobric-smooth" in out
+    assert "Client: loobric-cli" in out
     assert "no base URL" in out
 
 
@@ -861,7 +861,7 @@ def test_whoami_reports_old_server_without_version_endpoint(monkeypatch, capsys)
 
 
 # --- Regression: session-file paths (login/logout) reference transport.SESSION_FILE,
-# --- which moved out of the CLI module during the smooth-core -> loobric-smooth port.
+# --- which moved out of the CLI module during the loobric-core -> loobric-cli port.
 
 def test_login_saves_session_without_nameerror(monkeypatch, tmp_path, capsys):
     sess = tmp_path / "session.json"
