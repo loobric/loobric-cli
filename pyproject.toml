@@ -23,10 +23,14 @@ dependencies = []
 # large-XML XSD validation (lxml), etc. (see loobric-core#31 and docs/IMPORTERS_PLAN.md).
 importers = ["lxml>=5.0"]
 completion = ["argcomplete>=3.0"]
+# The MCP server (loobric-mcp): lets AI agents act on a Loobric Server via
+# any MCP host. Extra keeps the base install stdlib-only (see MCP_PLAN.md).
+mcp = ["mcp>=1.0"]
 dev = ["pytest>=7.4"]
 
 [project.scripts]
 loobric = "loobric.cli.main:main"
+loobric-mcp = "loobric.mcp.main:main"
 
 [build-system]
 requires = ["setuptools>=68"]

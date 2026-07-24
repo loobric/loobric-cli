@@ -3,6 +3,39 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] — 2026-07-24
+
+The first release under the **Loobric** name (package `loobric-cli`, import
+`loobric`, CLI `loobric` — the former "Smooth" branding is retired).
+
+### Added
+- **The Loobric MCP server (`loobric-mcp`).** A stdio MCP server that lets AI
+  agents on any MCP host (Claude Code, Claude Desktop, …) read and write tool
+  data on a Loobric Server through the public API's audited doors. Install
+  with `pip install 'loobric-cli[mcp]'` (the base package stays stdlib-only).
+  Configure with `LOOBRIC_BASE_URL`, `LOOBRIC_API_KEY` (omit for solo mode),
+  and `LOOBRIC_MCP_AGENT` (the agent name for provenance, default `agent`).
+  The locked rules (see the project's `MCP_PLAN.md`):
+  - every agent write is stamped **`asserted:<agent>@mcp`** — attributed, audited
+  - **agents assert, never observe** — no observe-door tool exists
+  - **no deletes, no Inbox confirmation, no bind/unbind, no credential
+    management** — those tools simply don't exist
+  - the **observed guard**: an assert targeting a field whose current value is
+    machine-measured (`observed`) is refused before any request is made
+  - 20 tools plus two agent-facing resources (`loobric://glossary`,
+    `loobric://concepts`) that teach the domain vocabulary
+- **`Client.query_audit_logs()`** — the audit-log query verb
+  (`GET /api/v1/audit-logs` with operation/entity/result filters), added to
+  the reference client first per the standing rule; the MCP
+  `query_audit_logs` tool uses it.
+
+### Fixed
+- **Explicit `User-Agent` on every request** (`loobric-cli/<version>`;
+  `loobric-mcp/<version>` from the MCP entry point). Cloudflare rejects
+  default Python UAs in front of api.loobric.com (error 1010 — the
+  smooth-linuxcnc incident); this closes that loose end for all consumers of
+  the transport. Overridable via `extra_headers`.
+
 ## [0.5.1] — 2026-06-29
 
 ### Added
