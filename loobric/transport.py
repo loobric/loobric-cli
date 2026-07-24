@@ -23,6 +23,21 @@ SESSION_DIR = Path.home() / ".loobric"
 SESSION_FILE = SESSION_DIR / "session.json"
 
 
+def _default_user_agent() -> str:
+    """The explicit User-Agent every request carries. Cloudflare rejects
+    default Python UAs (error 1010) in front of api.loobric.com, so this is a
+    correctness requirement. "unknown" covers vendored copies with no
+    installed package metadata."""
+    try:
+        from importlib.metadata import version
+        return "loobric-cli/" + version("loobric-cli")
+    except Exception:
+        return "loobric-cli/unknown"
+
+
+USER_AGENT = _default_user_agent()
+
+
 def load_session():
     """Load session cookie and base URL from file if it exists.
     
@@ -157,6 +172,7 @@ def make_request(
     conn = get_connection(base_url)
     path = urllib.parse.urljoin("/api/v1/", endpoint.lstrip("/"))
     headers = dict(extra_headers or {})
+    headers.setdefault("User-Agent", USER_AGENT)
     headers["Accept"] = "application/json"
     if raw_body is None:
         headers["Content-Type"] = "application/json"
