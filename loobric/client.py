@@ -363,6 +363,29 @@ class Client:
     def update_catalog(self, catalog_id: str, **fields) -> Dict[str, Any]:
         return self._call("PATCH", f"/catalogs/{catalog_id}", body=dict(fields))
 
+    # -- audit log -----------------------------------------------------------
+    def query_audit_logs(self, operation: Optional[str] = None,
+                         entity_type: Optional[str] = None,
+                         entity_id: Optional[str] = None,
+                         result: Optional[str] = None,
+                         user_id: Optional[str] = None,
+                         limit: Optional[int] = None,
+                         offset: Optional[int] = None) -> Dict[str, Any]:
+        """Query the audit log (who changed what, when). Regular accounts see
+        their own rows; admins see all and may filter by user_id. Returns the
+        server shape {logs, total_count, limit, offset, is_admin}; absent
+        filters are omitted from the query string."""
+        import urllib.parse
+        params = {k: v for k, v in {
+            "operation": operation, "entity_type": entity_type,
+            "entity_id": entity_id, "result": result, "user_id": user_id,
+            "limit": limit, "offset": offset,
+        }.items() if v is not None}
+        endpoint = "/audit-logs"
+        if params:
+            endpoint += "?" + urllib.parse.urlencode(params)
+        return self._call("GET", endpoint)
+
     # -- change detection ----------------------------------------------------
     def changes_max_version(self, entity_type: str) -> Dict[str, Any]:
         return self._call("GET", f"/changes/{entity_type}/max-version")
