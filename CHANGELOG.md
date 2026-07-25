@@ -3,6 +3,22 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] — 2026-07-25
+
+### Fixed
+- **MCP: `create_catalog_record` now teaches field placement.** The first
+  real-world agent session sent spec fields at the top level (`flute_count`,
+  `hand_of_cut`), was correctly rejected by the server's lane discipline, and
+  fell back to cramming the data into the name string. The tool description
+  and input-schema example now document the nested `geometry` object, the
+  canonical key names (`flutes`, not `flute_count`; extra geometry keys
+  accepted), and that non-geometry manufacturer data (grade, coating,
+  substrate, source URL, availability, alternate part numbers) belongs in the
+  free-form `client_data` dict — stored, never discarded. The
+  `loobric://concepts` resource gains the same guidance ("store everything,
+  in its right place"). No behavior change — the server accepted all of this
+  all along; the agent just couldn't discover it.
+
 ## [1.1.0] — 2026-07-25
 
 ### Added

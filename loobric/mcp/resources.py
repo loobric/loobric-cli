@@ -68,6 +68,17 @@ Everything an agent writes goes through create/assert doors and is stamped
 `asserted:<agent>@mcp` by the server — attributed, audited, and ranked below
 measured values on this channel.
 
+## Catalog records: store everything, in its right place
+A manufacturer page usually states more than the identity floor. Put
+dimensional spec in the nested `geometry` object ({value[, unit]} leaves;
+canonical keys include flutes, cutting_diameter, shank_diameter; extra keys
+are accepted) — never at the top level, where unknown keys are rejected.
+Everything else the source states — grade, coating, substrate, source URL,
+availability, alternate part numbers — goes in the free-form `client_data`
+dict. Nothing the manufacturer states gets discarded or crammed into the
+name string; and a field the source does NOT state stays absent — an honest
+blank beats a confident guess.
+
 ## What agents cannot do (by design, permanently)
 - delete anything, or reset/re-seed an account
 - confirm or reject Inbox items (binding stays a human act)

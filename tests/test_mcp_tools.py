@@ -16,6 +16,8 @@ Assumptions:
 - Handlers are plain functions taking (client, arguments) so they test
   against a fake Client without the MCP SDK installed
 """
+import json
+
 import pytest
 
 import loobric.mcp.tools as mcp_tools
@@ -121,6 +123,25 @@ def test_create_catalog_record_stamps_agent_actor(monkeypatch):
     name, args, kwargs = client.calls[0]
     assert name == "create_catalog_record"
     assert kwargs.get("source") == "claude@mcp"
+
+
+def test_create_catalog_record_description_teaches_field_placement():
+    """The first real-world session (2026-07-25) sent spec fields at the top
+    level (flute_count, hand_of_cut), got rejected by the server's
+    extra='forbid' lane discipline, and crammed the data into the name string.
+    The description is the agent's only manual: it must teach the nested
+    `geometry` object, the canonical key names (`flutes`, not flute_count),
+    and that non-geometry manufacturer data belongs in `client_data` —
+    stored, not discarded."""
+    tool = next(t for t in mcp_tools.TOOLS
+                if t.name == "create_catalog_record")
+    # The agent sees both the description and the input schema — check the
+    # combined surface.
+    surface = tool.description + json.dumps(tool.input_schema)
+    assert '\\"geometry\\"' in surface   # nesting shown in the JSON example
+    assert "flutes" in surface           # the canonical key name
+    assert "client_data" in surface      # the home for non-geometry extras
+    assert "never invent" in surface     # honest-sparse survives the rewrite
 
 
 def test_assert_field_uses_agent_actor(monkeypatch):

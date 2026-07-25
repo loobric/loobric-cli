@@ -207,16 +207,30 @@ TOOLS: List[ToolSpec] = [
     ToolSpec(
         "create_catalog_record",
         "Author a tool catalog record in one atomic, audited act. `fields` "
-        "carries {value[, unit]} leaves; name, manufacturer and product_code "
-        "are required (the identity floor — use manufacturer 'shop' for a "
-        "shop-made tool). Leave what you don't know absent; never invent "
-        "values. The server stamps every field asserted:<agent>@mcp.",
+        "carries {value[, unit]} leaves. Identity floor (required, top "
+        "level): name, manufacturer, product_code — use manufacturer 'shop' "
+        "for a shop-made tool. ALL dimensional/spec data goes inside the "
+        "nested `geometry` object, never at the top level (the server "
+        "rejects unknown top-level keys). Canonical geometry keys: diameter, "
+        "cutting_diameter, shape, length, flutes, cutting_edge_height, "
+        "shank_diameter, gauge_length; extra geometry keys are accepted as "
+        "{value[, unit]} leaves. Non-geometry data the source states — "
+        "grade, coating, substrate, source URL, availability, alternate "
+        "part numbers — belongs in the free-form `client_data` dict: store "
+        "it there, never cram it into the name string and never discard it. "
+        "Leave what the source does not state absent; never invent values. "
+        "The server stamps every field asserted:<agent>@mcp.",
         _schema({"fields": {
             "type": "object",
-            "description": "Nominal fields as {value[, unit]} leaves, e.g. "
-                           "{\"name\": {\"value\": \"6mm endmill\"}, "
-                           "\"manufacturer\": {\"value\": \"shop\"}, "
-                           "\"product_code\": {\"value\": \"EM-6\"}}."}},
+            "description": "Request fields, e.g. "
+                           "{\"name\": {\"value\": \"1/4in 4-flute endmill\"},"
+                           " \"manufacturer\": {\"value\": \"Kennametal\"},"
+                           " \"product_code\": {\"value\": \"H1TE4SE0250\"},"
+                           " \"geometry\": {\"flutes\": {\"value\": 4},"
+                           " \"cutting_diameter\": {\"value\": 0.25,"
+                           " \"unit\": \"in\"}},"
+                           " \"client_data\": {\"grade\": \"KCPM15\","
+                           " \"source_url\": \"https://…\"}}."}},
             ["fields"]),
         lambda c, a: c.create_catalog_record(source=agent_actor(),
                                              fields=a["fields"])),
