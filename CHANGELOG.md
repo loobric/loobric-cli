@@ -3,10 +3,7 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.0.0] — 2026-07-24
-
-The first release under the **Loobric** name (package `loobric-cli`, import
-`loobric`, CLI `loobric` — the former "Smooth" branding is retired).
+## [1.1.0] — 2026-07-25
 
 ### Added
 - **The Loobric MCP server (`loobric-mcp`).** A stdio MCP server that lets AI
@@ -29,12 +26,23 @@ The first release under the **Loobric** name (package `loobric-cli`, import
   the reference client first per the standing rule; the MCP
   `query_audit_logs` tool uses it.
 
+> Note: the git tag `v1.0.0` (2026-07-24) contains this same MCP work, but the
+> `loobric-cli` **1.0.0 published on PyPI** (2026-07-22) predates it and is the
+> rename-only release below — it has no `loobric.mcp` package and no `[mcp]`
+> extra. PyPI versions are immutable, so the MCP server first *ships* as 1.1.0.
+
 ### Fixed
 - **Explicit `User-Agent` on every request** (`loobric-cli/<version>`;
   `loobric-mcp/<version>` from the MCP entry point). Cloudflare rejects
   default Python UAs in front of api.loobric.com (error 1010 — the
   smooth-linuxcnc incident); this closes that loose end for all consumers of
   the transport. Overridable via `extra_headers`.
+
+## [1.0.0] — 2026-07-22
+
+The first release under the **Loobric** name (package `loobric-cli`, import
+`loobric`, CLI `loobric` — the former "Smooth" branding is retired). Renaming
+only; functionally equivalent to 0.5.1.
 
 ## [0.5.1] — 2026-06-29
 
