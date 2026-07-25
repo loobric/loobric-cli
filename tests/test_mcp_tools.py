@@ -144,6 +144,127 @@ def test_create_catalog_record_description_teaches_field_placement():
     assert "never invent" in surface     # honest-sparse survives the rewrite
 
 
+def test_create_catalog_record_names_the_client_for_client_data():
+    """The server stores `client_data` only when a `client` name accompanies
+    it — otherwise it is silently dropped (found by the media e2e smoke). If
+    the agent sends client_data without naming a client, the handler must
+    inject client='mcp' so preserved manufacturer data actually persists."""
+    client = FakeClient()
+    mcp_tools.call_tool(client, "create_catalog_record", {
+        "fields": {"name": {"value": "em"},
+                   "manufacturer": {"value": "shop"},
+                   "product_code": {"value": "EM-1"},
+                   "client_data": {"grade": "KCPM15"}}})
+    _, _, kwargs = client.calls[0]
+    assert kwargs["fields"]["client"] == "mcp"
+    # an explicitly named client is left alone
+    client2 = FakeClient()
+    mcp_tools.call_tool(client2, "create_catalog_record", {
+        "fields": {"name": {"value": "em"},
+                   "client": "freecad",
+                   "client_data": {"x": 1}}})
+    _, _, kwargs2 = client2.calls[0]
+    assert kwargs2["fields"]["client"] == "freecad"
+
+
+# -- media: attach from URL --------------------------------------------------
+
+def test_attach_media_downloads_and_uploads(monkeypatch):
+    """The tool downloads the URL and pushes the bytes through the client's
+    audited media door with the agent actor; the filename defaults to the
+    URL's basename."""
+    monkeypatch.setenv("LOOBRIC_MCP_AGENT", "claude")
+    monkeypatch.setattr(mcp_tools, "_download_media",
+                        lambda url: (b"solid model bytes", "model/step"))
+    client = FakeClient()
+    mcp_tools.call_tool(client, "attach_media_from_url", {
+        "resource": "tool-catalog-records", "record_id": "rec1",
+        "url": "https://example.com/cad/H1TE4SE0250.stp",
+        "role": "model_3d"})
+    name, args, kwargs = client.calls[0]
+    assert name == "upload_media"
+    assert args == ("tool-catalog-records", "rec1")
+    assert kwargs["data"] == b"solid model bytes"
+    assert kwargs["filename"] == "H1TE4SE0250.stp"
+    assert kwargs["role"] == "model_3d"
+    assert kwargs["content_type"] == "model/step"
+    assert kwargs["actor"] == "claude@mcp"
+
+
+def test_attach_media_explicit_filename_and_content_type(monkeypatch):
+    monkeypatch.setattr(mcp_tools, "_download_media",
+                        lambda url: (b"png bytes", "application/octet-stream"))
+    client = FakeClient()
+    mcp_tools.call_tool(client, "attach_media_from_url", {
+        "resource": "tool-instance-records", "record_id": "rec1",
+        "url": "https://example.com/dl?id=42", "role": "image",
+        "filename": "photo.png", "content_type": "image/png"})
+    _, _, kwargs = client.calls[0]
+    assert kwargs["filename"] == "photo.png"
+    assert kwargs["content_type"] == "image/png"
+
+
+def test_attach_media_rejects_non_http_url():
+    """Only http(s) sources: a file:// or ftp:// URL is refused before any
+    fetch happens (the MCP server must never read local files into records)."""
+    client = FakeClient()
+    for url in ("file:///etc/passwd", "ftp://example.com/f.stp"):
+        with pytest.raises(mcp_tools.MediaDownloadError):
+            mcp_tools.call_tool(client, "attach_media_from_url", {
+                "resource": "tool-catalog-records", "record_id": "rec1",
+                "url": url, "role": "model_3d"})
+    assert client.calls == []               # nothing reached the client
+
+
+def test_attach_media_enforces_size_cap(monkeypatch):
+    class FakeResponse:
+        headers = type("H", (), {"get_content_type":
+                                 staticmethod(lambda: "model/step")})()
+
+        def read(self, n=-1):
+            return b"x" * n                 # always fills the cap + 1 probe
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(mcp_tools, "urlopen",
+                        lambda req, timeout=None: FakeResponse())
+    with pytest.raises(mcp_tools.MediaDownloadError):
+        mcp_tools._download_media("https://example.com/huge.stp")
+
+
+def test_attach_media_sends_loobric_user_agent(monkeypatch):
+    """The fetch carries the transport's User-Agent (rebranded loobric-mcp/…
+    by main) — default Python UAs get Cloudflare-403'd (error 1010)."""
+    seen = {}
+
+    class FakeResponse:
+        headers = type("H", (), {"get_content_type":
+                                 staticmethod(lambda: "image/png")})()
+
+        def read(self, n=-1):
+            return b"ok"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def fake_urlopen(req, timeout=None):
+        seen["ua"] = req.get_header("User-agent")
+        return FakeResponse()
+
+    monkeypatch.setattr(mcp_tools, "urlopen", fake_urlopen)
+    data, ctype = mcp_tools._download_media("https://example.com/p.png")
+    assert data == b"ok" and ctype == "image/png"
+    from loobric import transport
+    assert seen["ua"] == transport.USER_AGENT
+
+
 def test_assert_field_uses_agent_actor(monkeypatch):
     monkeypatch.setenv("LOOBRIC_MCP_AGENT", "claude")
     client = FakeClient(canonical={

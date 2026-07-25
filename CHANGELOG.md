@@ -3,6 +3,30 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] — 2026-07-25
+
+### Added
+- **MCP: `attach_media_from_url` — agents can now attach media** (founder
+  decision reversing the v1 exclusion, prompted by the first real-world
+  session leaving a manufacturer's CAD model behind). The MCP server
+  downloads a public **http(s)** URL (50 MB cap; carries the loobric-mcp
+  User-Agent — default Python UAs are Cloudflare-403'd) and uploads the
+  bytes through the existing audited media door onto a catalog or instance
+  record's canonical media, stamped `asserted:<agent>@mcp`. Roles:
+  `model_3d`, `model_3d_basic`, `drawing_2d`, `image`, `icon`, `logo`,
+  `document`. File bytes never enter the model's context; non-http(s) URLs
+  (`file://`, …) are refused before any fetch; re-attaching identical bytes
+  is a no-op; **no removal tool exists** — dropping a media reference stays
+  a human action. Tool count: 21.
+
+### Fixed
+- **MCP: `client_data` no longer silently lost on create.** The server
+  stores `client_data` only under a named client section; the 1.1.1 guidance
+  told agents to send it but nothing named the client, so the data was
+  dropped without error (caught by the media e2e smoke). The
+  `create_catalog_record` handler now injects `client: "mcp"` when
+  `client_data` arrives unnamed; an explicitly named client is left alone.
+
 ## [1.1.1] — 2026-07-25
 
 ### Fixed

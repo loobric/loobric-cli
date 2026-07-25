@@ -22,8 +22,11 @@ Assumptions:
   measurements; agents may not overwrite them)
 """
 import os
+import posixpath
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Tuple
+from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
 
 AGENT_ENV = "LOOBRIC_MCP_AGENT"
 
@@ -44,6 +47,70 @@ class ObservedValueError(Exception):
     (source kind ``observed``). Refused: measured values outrank agent
     assertions on this channel. A human may still override via the CLI or
     Web UI."""
+
+
+class MediaDownloadError(Exception):
+    """A media fetch was refused (non-http(s) URL) or failed (size cap,
+    network). Raised before anything reaches the Loobric Server."""
+
+
+# attach_media_from_url: which records carry canonical media, the roles the
+# server's MediaRef contract accepts, and the download cap.
+_MEDIA_RESOURCES = ("tool-catalog-records", "tool-instance-records")
+_MEDIA_ROLES = ("model_3d", "model_3d_basic", "drawing_2d", "image", "icon",
+                "logo", "document")
+MEDIA_MAX_BYTES = 50 * 1024 * 1024
+
+
+def _download_media(url: str, max_bytes: int = MEDIA_MAX_BYTES) -> Tuple[bytes, str]:
+    """Fetch `url` and return (bytes, content_type).
+
+    http(s) only — the MCP server must never read local files into records.
+    The request carries the transport's User-Agent (rebranded loobric-mcp/…
+    by main): default Python UAs are Cloudflare-403'd (error 1010), and many
+    manufacturer sites do the same. Reads at most max_bytes + 1 so an
+    oversized file fails fast instead of filling memory."""
+    scheme = urlsplit(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise MediaDownloadError(
+            "refusing to fetch %r — only http(s) URLs are allowed" % url)
+    from loobric import transport                 # call-time UA read
+    req = Request(url, headers={"User-Agent": transport.USER_AGENT})
+    try:
+        with urlopen(req, timeout=60) as resp:
+            data = resp.read(max_bytes + 1)
+            content_type = (resp.headers.get_content_type()
+                            or "application/octet-stream")
+    except MediaDownloadError:
+        raise
+    except OSError as exc:
+        raise MediaDownloadError("download failed: %s" % exc) from exc
+    if len(data) > max_bytes:
+        raise MediaDownloadError(
+            "download exceeds the %d MB cap" % (max_bytes // (1024 * 1024)))
+    return data, content_type
+
+
+def _create_catalog_record(client: Any, args: Dict[str, Any]) -> Any:
+    """Create with the agent actor; if `client_data` is sent without a
+    `client` name, inject client='mcp' — the server stores client_data only
+    under a named client section and silently drops it otherwise."""
+    fields = dict(args["fields"])
+    if fields.get("client_data") and not fields.get("client"):
+        fields["client"] = "mcp"
+    return client.create_catalog_record(source=agent_actor(), fields=fields)
+
+
+def _attach_media(client: Any, args: Dict[str, Any]) -> Any:
+    data, content_type = _download_media(args["url"])
+    filename = (args.get("filename")
+                or posixpath.basename(urlsplit(args["url"]).path)
+                or "download")
+    return client.upload_media(
+        args["resource"], args["record_id"], data=data, filename=filename,
+        role=args["role"],
+        content_type=args.get("content_type") or content_type,
+        actor=agent_actor())
 
 
 @dataclass(frozen=True)
@@ -232,8 +299,7 @@ TOOLS: List[ToolSpec] = [
                            " \"client_data\": {\"grade\": \"KCPM15\","
                            " \"source_url\": \"https://…\"}}."}},
             ["fields"]),
-        lambda c, a: c.create_catalog_record(source=agent_actor(),
-                                             fields=a["fields"])),
+        _create_catalog_record),
     ToolSpec(
         "create_instance_from_catalog",
         "Create a new physical tool instance from a catalog record. The "
@@ -273,6 +339,37 @@ TOOLS: List[ToolSpec] = [
                  "machine_id": {"type": "string"}},
                 ["set_id", "machine_id"]),
         lambda c, a: c.link_set_to_machine(a["set_id"], a["machine_id"])),
+    ToolSpec(
+        "attach_media_from_url",
+        "Attach a media file to a record's canonical media by downloading "
+        "it from a public http(s) URL — a 3D model (STEP), 2D drawing, "
+        "product photo, or datasheet from a manufacturer page. When a "
+        "product page offers a CAD download, fetching the model is part of "
+        "storing everything the manufacturer supplies. The MCP server "
+        "fetches the bytes (50 MB cap) and uploads them through the audited "
+        "media door; the server stamps the reference asserted:<agent>@mcp. "
+        "Re-attaching identical bytes for the same role is a no-op; no "
+        "removal tool exists — dropping a media reference is a human action "
+        "in the Web UI.",
+        _schema({"resource": {"type": "string",
+                              "enum": list(_MEDIA_RESOURCES)},
+                 "record_id": {"type": "string"},
+                 "url": {"type": "string",
+                         "description": "Public http(s) URL of the file."},
+                 "role": {"type": "string", "enum": list(_MEDIA_ROLES),
+                          "description": "What the file is: model_3d / "
+                                         "model_3d_basic (3D solid, e.g. "
+                                         "STEP), drawing_2d, image (product "
+                                         "photo), icon, logo, document "
+                                         "(datasheet or other)."},
+                 "filename": {"type": "string",
+                              "description": "Stored filename; defaults to "
+                                             "the URL's basename."},
+                 "content_type": {"type": "string",
+                                  "description": "MIME type; defaults to "
+                                                 "the response header."}},
+                ["resource", "record_id", "url", "role"]),
+        _attach_media),
     ToolSpec(
         "assert_field",
         "Deliberately declare a canonical value on a record (the audited "
