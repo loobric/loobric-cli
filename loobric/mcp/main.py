@@ -67,14 +67,40 @@ def scope_warning(me: dict) -> "str | None":
             % ", ".join(excess))
 
 
-def _warn_if_over_scoped(client) -> None:
-    """Best-effort startup nudge; never blocks startup (Q12: warn, don't
-    refuse — and a dead server should fail on the first tool call, with a
-    proper MCP error, not here)."""
+def credential_failure_message(exc: Exception) -> "str | None":
+    """A loud, specific message when the configured credential is rejected
+    outright (HTTP 401) — the single most common field failure (three of the
+    first four real sessions). Names the actual causes in likelihood order.
+
+    Anything that isn't a 401 returns None: a down server or a scope
+    refusal should surface on the first tool call, with a proper error,
+    not at startup."""
+    from loobric.errors import HTTPError
+    if isinstance(exc, HTTPError) and exc.status == 401:
+        return (
+            "loobric-mcp: the server rejected this credential (HTTP 401) — "
+            "every tool call will fail until it is fixed. Check, in order: "
+            "(1) the MCP host was restarted after the key changed (env is "
+            "read at startup only); (2) LOOBRIC_API_KEY in the config that "
+            "actually applies — a project-scoped MCP entry overrides the "
+            "global one (check ~/.claude.json for stale or placeholder "
+            "entries); (3) LOOBRIC_BASE_URL points at the server the key "
+            "was created on; (4) the key wasn't revoked.")
+    return None
+
+
+def _startup_credential_check(client) -> None:
+    """Best-effort startup check; never blocks startup (SCOPES_PLAN Q12:
+    warn, don't refuse). A dead credential gets the loud 401 message; a
+    healthy over-scoped key gets the least-privilege nudge."""
     try:
-        msg = scope_warning(client.whoami())
-    except Exception:
+        me = client.whoami()
+    except Exception as exc:
+        msg = credential_failure_message(exc)
+        if msg:
+            print(msg, file=sys.stderr)
         return
+    msg = scope_warning(me)
     if msg:
         print(msg, file=sys.stderr)
 
@@ -135,7 +161,7 @@ async def _run() -> None:
     from mcp.server.stdio import stdio_server
 
     client = _client_from_env()
-    _warn_if_over_scoped(client)
+    _startup_credential_check(client)
     server = build_server(client)
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream,

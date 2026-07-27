@@ -3,6 +3,19 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] — 2026-07-27
+
+### Fixed
+- **`loobric-mcp` now diagnoses a dead credential at startup.** Three of the
+  first four real field sessions failed on a rejected key (HTTP 401 on every
+  call), and the startup check silently swallowed it — the agent could only
+  report "everything 401s" mid-task. A 401 at connect time now prints one
+  specific stderr message naming the causes in likelihood order: host not
+  restarted after a key change (env is read at startup only), a
+  project-scoped MCP config entry shadowing the global one, a
+  key/LOOBRIC_BASE_URL server mismatch, or a revoked key. Non-401 errors
+  stay quiet — a down server surfaces properly on the first tool call.
+
 ## [1.3.0] — 2026-07-27
 
 Companion to loobric-server **0.6.0**, which enforces door-aligned API key
