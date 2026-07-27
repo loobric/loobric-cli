@@ -3,6 +3,23 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] — 2026-07-27
+
+Companion to loobric-server **0.6.0**, which enforces door-aligned API key
+scopes (`read sync observe assert bind delete admin`) and degrades pre-0.6.0
+keys to read-only. **Rotate old keys** — this release makes that one word.
+
+### Added
+- **`loobric create-key --preset agent|controller|cam|full`** — named scope
+  presets for the door model. `agent` (the AI/MCP key) is
+  `read sync assert`: it can never observe, bind, or delete, making the
+  agent doctrine a property of the credential. `--scopes` still wins when
+  both are given; no preset grants `admin`.
+- **`loobric-mcp` least-privilege startup warning**: on connect it
+  introspects its key (`/auth/me` now reports effective scopes on 0.6.0+)
+  and logs one line when the key grants doors the MCP server never uses —
+  warn, don't refuse. Quiet against older servers and solo mode.
+
 ## [1.2.0] — 2026-07-25
 
 ### Added

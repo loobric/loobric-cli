@@ -117,23 +117,52 @@ def login(email: str = None, password: str = None, base_url: str = None):
         print(f"  Base URL: {transport.BASE_URL}")
 
 
+# Door-scope presets (server 0.6.0, SCOPES_PLAN): a key holds the DOORS it
+# may use. The agent preset deliberately lacks observe/bind/delete — agents
+# assert, never observe, and never confirm bindings or delete. No preset
+# grants admin; ask for it explicitly with --scopes if you truly need it.
+PRESET_SCOPES = {
+    "agent":      ["read", "sync", "assert"],
+    "controller": ["read", "sync", "observe"],
+    "cam":        ["read", "sync", "assert"],
+    "full":       ["read", "sync", "observe", "assert", "bind", "delete"],
+}
+
+
+def resolve_scopes(scopes: Optional[str],
+                   preset: Optional[str]) -> Optional[list]:
+    """Explicit --scopes wins; else the preset; else None (the 0.6.0 server
+    answers a scope-less create with a 400 that names the door vocabulary)."""
+    if scopes:
+        return scopes.strip().split()
+    if preset:
+        if preset not in PRESET_SCOPES:
+            sys.exit("Unknown preset %r — one of: %s"
+                     % (preset, ", ".join(sorted(PRESET_SCOPES))))
+        return PRESET_SCOPES[preset]
+    return None
+
+
 def create_key(
     name: str,
     scopes: Optional[str] = None,
     tags: Optional[str] = None,
-    expires_at: Optional[str] = None
+    expires_at: Optional[str] = None,
+    preset: Optional[str] = None
 ):
     """Create a new API key.
-    
+
     Args:
         name: Descriptive name for the API key
-        scopes: Space-separated list of scopes (e.g., 'read write:items')
+        scopes: Space-separated door scopes (e.g. 'read sync assert')
         tags: Space-separated list of tags (e.g., 'production mill-3')
         expires_at: ISO 8601 datetime string for expiration
+        preset: Named scope preset (agent / controller / cam / full);
+            --scopes wins when both are given
     """
     data = _client().create_key(
         name,
-        scopes=scopes.strip().split() if scopes else None,
+        scopes=resolve_scopes(scopes, preset),
         tags=tags.strip().split() if tags else None,
         expires_at=expires_at,
     )
@@ -1422,11 +1451,14 @@ Environment Variables:
     # === create-key ===
     create_parser = subparsers.add_parser("create-key", help="Generate a new API key")
     create_parser.add_argument("name", help="Name for the API key (e.g., 'My App')")
-    create_parser.add_argument("--scopes", help="Space-separated scopes, e.g., 'read write'")
+    create_parser.add_argument("--scopes", help="Space-separated door scopes, e.g. 'read sync assert'")
+    create_parser.add_argument("--preset", choices=sorted(PRESET_SCOPES),
+                               help="Named scope preset: agent (AI/MCP: read sync assert), "
+                                    "controller (read sync observe), cam, full")
     create_parser.add_argument("--tags", help="Space-separated tags, e.g., 'production mill-3'")
     create_parser.add_argument("--expires-at", help="ISO datetime, e.g., 2025-12-31T23:59:59Z")
     create_parser.set_defaults(func=lambda args: create_key(
-        args.name, args.scopes, args.tags, args.expires_at
+        args.name, args.scopes, args.tags, args.expires_at, args.preset
     ))
 
     # === list-keys ===

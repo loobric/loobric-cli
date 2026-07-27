@@ -43,6 +43,42 @@ def _client_from_env():
     return Client(base_url=base_url, api_key=os.getenv("LOOBRIC_API_KEY"))
 
 
+# The doors this MCP server actually uses. Anything beyond these on the
+# configured key is unused power a raw-client bypass would inherit.
+_MCP_DOORS = {"read", "sync", "assert"}
+
+
+def scope_warning(me: dict) -> "str | None":
+    """A least-privilege warning when the configured key grants doors the MCP
+    server never uses (SCOPES_PLAN Q12: warn, don't refuse).
+
+    `me` is the /auth/me response; a 0.6.0+ server includes the calling
+    key's effective scopes for key auth. No scopes reported (older server,
+    session, solo) → stay quiet."""
+    scopes = me.get("scopes") or None
+    if not scopes:
+        return None
+    excess = sorted(set(scopes) - _MCP_DOORS)
+    if not excess:
+        return None
+    return ("loobric-mcp: this key also grants %s — loobric-mcp never uses "
+            "them, but anything holding the key could. A 'read sync assert' "
+            "key is safer (loobric create-key --preset agent)."
+            % ", ".join(excess))
+
+
+def _warn_if_over_scoped(client) -> None:
+    """Best-effort startup nudge; never blocks startup (Q12: warn, don't
+    refuse — and a dead server should fail on the first tool call, with a
+    proper MCP error, not here)."""
+    try:
+        msg = scope_warning(client.whoami())
+    except Exception:
+        return
+    if msg:
+        print(msg, file=sys.stderr)
+
+
 def build_server(client):
     """Wire the SDK-independent registry into an MCP lowlevel Server."""
     import mcp.types as types
@@ -99,6 +135,7 @@ async def _run() -> None:
     from mcp.server.stdio import stdio_server
 
     client = _client_from_env()
+    _warn_if_over_scoped(client)
     server = build_server(client)
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream,
