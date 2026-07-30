@@ -1,6 +1,6 @@
 [project]
 name = "loobric-cli"
-version = "1.4.0"
+version = "1.4.1"
 description = "Python client library and CLI for Loobric Core (CNC tool-data sync)."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -25,7 +25,10 @@ importers = ["lxml>=5.0"]
 completion = ["argcomplete>=3.0"]
 # The MCP server (loobric-mcp): lets AI agents act on a Loobric Server via
 # any MCP host. Extra keeps the base install stdlib-only (see MCP_PLAN.md).
-mcp = ["mcp>=1.0"]
+# <2: SDK 2.0.0 removed the 1.x low-level Server decorator API (list_tools/
+# call_tool) that main.py builds on — a fresh unpinned install crashed at
+# startup (2026-07-30). Raise only together with a build_server port.
+mcp = ["mcp>=1.0,<2"]
 dev = ["pytest>=7.4"]
 
 [project.scripts]

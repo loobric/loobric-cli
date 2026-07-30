@@ -185,7 +185,13 @@ TOOLS: List[ToolSpec] = [
     ToolSpec(
         "list_tool_instance_records",
         "List the account's tool instance records — each one physical tool "
-        "with canonical identity/geometry/status and per-field provenance.",
+        "with canonical identity/geometry/status and per-field provenance. "
+        "An EMPTY result does not mean the shop has no tools: machines may "
+        "have reported tool-table entries that nobody has bound to records "
+        "yet (a fresh controller sync looks exactly like that). When empty, "
+        "also call list_tool_table_entries and tell the user both facts — "
+        "'no tool records defined; machine X reports N unbound entries' — "
+        "and ask which they meant, rather than answering 'no tools'.",
         _schema({}, []),
         lambda c, a: c.list_tool_records()),
     ToolSpec(
@@ -207,14 +213,19 @@ TOOLS: List[ToolSpec] = [
         lambda c, a: c.get_catalog_record(a["record_id"])),
     ToolSpec(
         "list_tool_sets",
-        "List ToolSets — named collections of tools, optionally linked to a "
-        "Machine (member numbers then come from its tool table).",
+        "List ToolSets — CAM-owned named collections of tools. A member's "
+        "number is a durable CLAIM (the T-number posted G-code will call); "
+        "the machine relationship is a SETUP an operator activates "
+        "(loobric use-set), never a set field.",
         _schema({}, []),
         lambda c, a: c.list_tool_sets()),
     ToolSpec(
         "get_tool_set",
-        "Get one ToolSet with its members and their derived states "
-        "(loaded / requested / pending bind).",
+        "Get one ToolSet with its members: each carries its claimed number, "
+        "and — when some machine runs the set as its active setup — the "
+        "machine's observed number and a derived state (satisfied / "
+        "requested / mismounted / blocked / pending bind) alongside the "
+        "untouched claim.",
         _schema(dict(_RECORD_ID), ["record_id"]),
         lambda c, a: c.get_tool_set(a["record_id"])),
     ToolSpec(
@@ -231,7 +242,9 @@ TOOLS: List[ToolSpec] = [
         "list_tool_table_entries",
         "List tool table entries — the machine side of the CAM-to-CNC "
         "contract (tool_number, offsets, bound tool instance). Optionally "
-        "filter by machine_id.",
+        "filter by machine_id. Entries exist independently of tool records: "
+        "a machine's sync creates them unbound, so a populated table with "
+        "an empty crib is a normal fresh state, not an error.",
         _schema({"machine_id": {"type": "string",
                                 "description": "Limit to one Machine."}}, []),
         lambda c, a: c.list_entries(a.get("machine_id"))),
@@ -349,8 +362,11 @@ TOOLS: List[ToolSpec] = [
         "claimed number, identity confirmed), the unmet claims "
         "(requested / mismounted / blocked / pending bind), and informational "
         "notes (unlisted / unknown tools). Switching a machine's setup is an "
-        "operator act (`loobric use-set`, bind door) — agent keys cannot do "
-        "it, by design.",
+        "operator act agent keys cannot perform (bind door), by design. When "
+        "relaying the verb to the user, its exact shape is "
+        "`loobric use-set MACHINE SET` (positional, machine first; both "
+        "accept id, name, or unique prefix) and `loobric use-set MACHINE "
+        "--none` to end — there is no --machine flag.",
         _schema({"machine_id": {"type": "string"}}, ["machine_id"]),
         lambda c, a: c.reconciliation(a["machine_id"])),
     ToolSpec(

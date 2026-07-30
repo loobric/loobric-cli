@@ -109,6 +109,23 @@ loobric import package.zip                  # GTC package (ISO 13399) + 3D model
 Re-importing the same catalog is detected by natural key and reported as
 *skipped*, never duplicated.
 
+## AI agents (MCP) & credential hygiene
+
+`pip install 'loobric-cli[mcp]'` installs **`loobric-mcp`**, a stdio MCP
+server any MCP host can run. Configure it with `LOOBRIC_BASE_URL`,
+`LOOBRIC_API_KEY`, and `LOOBRIC_MCP_AGENT` (the agent's name for
+provenance). Every agent write is stamped `asserted:<agent>@mcp` and
+audited; agents cannot delete, bind, confirm Inbox items, switch a
+machine's setup, or overwrite a machine-measured value.
+
+Those limits are properties of the **credential**, so the key matters more
+than the tool surface: give an agent workstation a key minted with
+`loobric create-key --preset agent` (`read sync assert`) and **do not**
+leave a logged-in human session (`~/.loobric/session.json`) or a broader
+key where the agent's CLI fallback can pick it up — a session is unscoped,
+and an agent holding one can do everything you can. If an agent reports
+that a bind or delete *succeeded*, that's the misconfiguration signal.
+
 ## License
 
 MIT. (The server, Loobric Core, is AGPL-3.0; this client is MIT so it can be

@@ -68,6 +68,15 @@ Everything an agent writes goes through create/assert doors and is stamped
 `asserted:<agent>@mcp` by the server — attributed, audited, and ranked below
 measured values on this channel.
 
+## "Tools" is ambiguous — disambiguate before answering
+A tool-table ENTRY (machine-observed row: number + offsets, possibly
+unbound) is not a tool INSTANCE record (a physical tool in the crib). A
+fresh controller sync produces entries and nothing else, so "no tool records
++ N unbound entries" is a normal starting state. Asked "what tools do I
+have?" when the records list is empty, report BOTH facts and ask which the
+user meant — never answer a bare "none" while a machine is reporting a
+populated table.
+
 ## Catalog records: store everything, in its right place
 A manufacturer page usually states more than the identity floor. Put
 dimensional spec in the nested `geometry` object ({value[, unit]} leaves;
@@ -87,6 +96,16 @@ blank beats a confident guess.
 
 When one of these blocks you, say so and point the user at the Web UI or CLI
 — do not look for a workaround.
+
+## Credential hygiene (if you can bind, something is misconfigured)
+These limits are properties of the AGENT KEY (`read sync assert`), not of
+you. If the MCP server is down and you fall back to the `loobric` CLI, the
+CLI may pick up a HUMAN session file or a broader key — and suddenly binds,
+deletes, or setup switches will succeed. Succeeding is the failure: you are
+holding a person's credential. Check `loobric whoami` before writing, prefer
+LOOBRIC_API_KEY with the agent preset, and if a write that should be beyond
+you succeeds, stop and tell the user their agent environment is carrying the
+wrong credential.
 """
 
 RESOURCES = [

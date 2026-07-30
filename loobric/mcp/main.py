@@ -114,6 +114,17 @@ def build_server(client):
     from loobric.mcp import resources as resources_mod
     from loobric.mcp import tools as tools_mod
 
+    # SDK compatibility guard: the 2.0 SDK removed the 1.x low-level Server
+    # decorator API this function builds on. Without this check the crash is
+    # a bare AttributeError deep in a traceback (seen in the field,
+    # 2026-07-30); with it, the operator gets the one-line fix.
+    if not hasattr(Server, "list_tools"):
+        import importlib.metadata
+        raise SystemExit(
+            "loobric-mcp: installed 'mcp' SDK %s is unsupported (its 1.x "
+            "low-level server API is gone). Fix: pip install 'mcp>=1.0,<2'"
+            % importlib.metadata.version("mcp"))
+
     server = Server(
         "loobric", version=_version(),
         instructions=(

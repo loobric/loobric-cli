@@ -265,6 +265,11 @@ class Client:
     def revoke_key(self, key_id: str) -> Dict[str, Any]:
         return self._call("DELETE", f"/auth/keys/{key_id}")
 
+    def delete_key(self, key_id: str) -> Dict[str, Any]:
+        """Permanently delete a REVOKED key (the server 409s on an active
+        one — revoke first; two deliberate steps by design)."""
+        return self._call("DELETE", f"/auth/keys/{key_id}?purge=true")
+
     def whoami(self) -> Dict[str, Any]:
         return self._call("GET", "/auth/me")
 

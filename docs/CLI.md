@@ -192,7 +192,20 @@ timestamps where available. The plaintext key is never shown.
 loobric revoke-key KEY_ID
 ```
 
-Revoke (delete) an API key by its id. Prints a confirmation.
+Revoke an API key by its id — a soft delete: any client using it stops
+working immediately, and the key stays listed as **revoked** (the audit
+trail's anchor) until deleted.
+
+#### `delete-key`
+
+```
+loobric delete-key KEY [--yes]
+```
+
+Permanently remove a **revoked** key's row. `KEY` resolves by id, name, or
+unique prefix. Deliberately two steps: an active key must be revoked first —
+the server refuses to take a working credential straight to gone. Audit rows
+keep the key's id; only the row disappears. Prompts unless `--yes`.
 
 ### Machines and tools
 

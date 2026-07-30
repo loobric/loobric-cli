@@ -211,13 +211,34 @@ def list_keys():
 
 
 def revoke_key(key_id: str):
-    """Revoke (delete) an API key.
-    
+    """Revoke an API key (soft: the row stays listed as revoked).
+
     Args:
         key_id: The ID of the key to revoke
     """
     _client().revoke_key(key_id)
-    print(f"✓ API key {key_id} revoked successfully.")
+    print(f"✓ API key {key_id} revoked. It stays listed as revoked; "
+          f"`loobric delete-key` removes it for good.")
+
+
+def delete_key(handle: str, assume_yes: bool = False):
+    """Permanently delete a REVOKED API key (two deliberate steps: an active
+    key must be revoked first, so a working credential can never go straight
+    to gone). Audit rows keep the key's id; only the row disappears."""
+    key = _resolve_key(handle)
+    label = key.get("name") or str(key.get("id"))[:8]
+    if key.get("is_active", True):
+        print(f"Error: key '{label}' is still active — revoke it first "
+              f"(`loobric revoke-key {key.get('id')}`), then delete.",
+              file=sys.stderr)
+        sys.exit(1)
+    if not _confirm(f"Permanently delete revoked key '{label}'? "
+                    f"Audit history keeps its id; the row is gone for good.",
+                    assume_yes):
+        print("Aborted.")
+        return
+    _client().delete_key(key["id"])
+    print(f"✓ Deleted revoked key '{label}'.")
 
 
 def list_tool_sets():
@@ -542,10 +563,29 @@ def list_machines():
 
 
 def list_tools():
-    """List the user's tool instance records (the public facade)."""
-    items = _client().list_tool_records()
+    """List the user's tool instance records (the public facade).
+
+    Empty is ambiguous when a machine has synced: a fresh controller push
+    creates tool-table ENTRIES (machine-observed rows) with no tool RECORDS
+    behind them, and "no tools" would misread that state. So the empty path
+    checks the machines and names what the tables hold instead."""
+    c = _client()
+    items = c.list_tool_records()
     if not items:
         print("No tool records found.")
+        reported = []
+        try:
+            for m in c.list_machines():
+                n = len(c.list_entries(_rid(m)))
+                if n:
+                    reported.append((_cval(m, "name") or str(_rid(m))[:8], n))
+        except Exception:
+            reported = []
+        for name, n in reported:
+            plural = "entries" if n != 1 else "entry"
+            print(f"  (machine '{name}' reports {n} tool-table {plural} — "
+                  f"`loobric tool-table {name}` to see them; "
+                  f"`loobric create-record` turns one into a tool record)")
         return
     print(f"\nTool Records ({len(items)}):")
     print("=" * 78)
@@ -1600,6 +1640,19 @@ Environment Variables:
     revoke_parser = subparsers.add_parser("revoke-key", help="Revoke an API key")
     revoke_parser.add_argument("key_id", help="ID of the key to revoke")
     revoke_parser.set_defaults(func=lambda args: revoke_key(args.key_id))
+
+    # === delete-key ===
+    delete_key_parser = subparsers.add_parser(
+        "delete-key", help="Permanently delete a REVOKED API key",
+        description="Remove a revoked key's row for good (an active key must "
+                    "be revoked first). KEY resolves by id, name, or unique "
+                    "prefix. Audit history keeps the key's id.",
+    )
+    delete_key_parser.add_argument("key", help="Key id, name, or unique prefix")
+    delete_key_parser.add_argument("--yes", "-y", action="store_true",
+                                   help="Skip the confirmation prompt")
+    delete_key_parser.set_defaults(
+        func=lambda args: delete_key(args.key, args.yes))
 
     # === list-tool-sets ===
     list_tool_sets_parser = subparsers.add_parser(

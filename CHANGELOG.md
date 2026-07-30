@@ -3,6 +3,47 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.1] — 2026-07-30 (lessons from the first setups-era field sessions)
+
+### Fixed
+- **`loobric-mcp` crashed at startup on a fresh install** — the MCP Python
+  SDK released 2.0.0, which removes the 1.x low-level `Server` decorator API
+  (`AttributeError: 'Server' object has no attribute 'list_tools'`), and the
+  `[mcp]` extra was unbounded (`mcp>=1.0`), so new installs pulled the
+  incompatible SDK while old environments kept working. Pinned to
+  `mcp>=1.0,<2`, plus a startup guard that names the one-line fix
+  (`pip install 'mcp>=1.0,<2'`) instead of a bare traceback for environments
+  that already hold 2.x. SDK 2.0 support is a separate port.
+- **"What tools do I have?" on a fresh sync no longer reads as "none"**
+  (first setups-era demo session, 2026-07-30). A controller push creates
+  tool-table entries with no tool records behind them, and both surfaces
+  answered ambiguously: `loobric list-tools` with an empty crib now names
+  each machine's entry count and the disambiguating verbs; the MCP
+  `list_tool_instance_records` description teaches agents to report BOTH
+  facts and ask which the user meant; `loobric://concepts` gains the
+  entry-vs-record distinction.
+- MCP `list_tool_sets` / `get_tool_set` descriptions caught up with 1.4.0's
+  setups vocabulary (claims + derived states; the retired "linked"/"loaded"
+  language was still there).
+
+### Added
+- **Credential hygiene, taught where it's breached** (same demo session: the
+  agent's CLI fallback picked up a human session and bound five entries —
+  "agents never bind" is a credential property, and the credential was
+  wrong). `loobric://concepts` gains a "if you can bind, something is
+  misconfigured" section (check `loobric whoami`, prefer the agent-preset
+  key, report an over-privileged success as the failure it is); the README
+  gains an "AI agents (MCP) & credential hygiene" section — the MCP server's
+  first README documentation — telling humans to give agent workstations an
+  agent-preset key and never a shared session file.
+- MCP `machine_setup_status` now states the exact CLI verb shape
+  (`loobric use-set MACHINE SET`, `--none` to end; no `--machine` flag) so
+  agents relay it correctly instead of guessing.
+- **`loobric delete-key KEY [--yes]`** — permanently remove a **revoked**
+  key's row (resolves by id/name/prefix; refuses an active key — revoke
+  first, deliberately two steps). Library: `Client.delete_key`. Pairs with
+  loobric-server's `DELETE /auth/keys/{id}?purge=true`.
+
 ## [1.4.0] — 2026-07-29 (BREAKING: pairs with loobric-server 0.7.0)
 
 ### Added

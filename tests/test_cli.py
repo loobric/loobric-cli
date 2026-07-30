@@ -988,3 +988,74 @@ def test_logout_clears_session_without_nameerror(monkeypatch, tmp_path, capsys):
     out = capsys.readouterr().out
     assert "Logged out" in out
     assert not sess.exists(), "logout must clear the session file"
+
+
+# ---------------------------------------------------------------------------
+# "Tools" is ambiguous: empty records + populated tables must say both facts.
+# ---------------------------------------------------------------------------
+
+def test_list_tools_empty_names_machine_entries(monkeypatch, capsys):
+    """A fresh controller sync leaves tool-table entries with no tool records
+    behind them; `list-tools` must not read as a bare "no tools" then — it
+    names each machine's entry count and the verbs that disambiguate."""
+    def fake(method, endpoint, **kw):
+        if endpoint.startswith("/tool-instance-records"):
+            return {"items": []}
+        if endpoint.startswith("/machine-records"):
+            return {"items": [MACHINE]}
+        if endpoint.startswith("/tool-table-entry-records"):
+            return {"items": [ENTRY]}
+        return {"items": []}
+    monkeypatch.setattr(transport, "make_request", fake)
+    cli.list_tools()
+    out = capsys.readouterr().out
+    assert "No tool records found." in out
+    assert "Haas Mini" in out
+    assert "1 tool-table entry" in out
+    assert "create-record" in out
+
+
+def test_list_tools_empty_stays_quiet_without_machines(monkeypatch, capsys):
+    def fake(method, endpoint, **kw):
+        return {"items": []}
+    monkeypatch.setattr(transport, "make_request", fake)
+    cli.list_tools()
+    out = capsys.readouterr().out
+    assert "No tool records found." in out
+    assert "tool-table" not in out
+
+
+# ---------------------------------------------------------------------------
+# delete-key: permanently remove a REVOKED key (two deliberate steps).
+# ---------------------------------------------------------------------------
+
+def _keys_transport(recorder, keys):
+    def fake(method, endpoint, **kw):
+        recorder.append({"method": method, "endpoint": endpoint})
+        if method == "GET" and endpoint == "/auth/keys":
+            return keys
+        return {}
+    return fake
+
+
+def test_delete_key_purges_a_revoked_key(monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(transport, "make_request", _keys_transport(
+        calls, [{"id": "keyid1", "name": "old", "scopes": [], "is_active": False}]))
+    cli.delete_key("old", assume_yes=True)
+    assert calls[-1] == {"method": "DELETE",
+                         "endpoint": "/auth/keys/keyid1?purge=true"}
+    assert "Deleted revoked key 'old'" in capsys.readouterr().out
+
+
+def test_delete_key_refuses_an_active_key(monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(transport, "make_request", _keys_transport(
+        calls, [{"id": "keyid1", "name": "live", "scopes": ["read"],
+                 "is_active": True}]))
+    with pytest.raises(SystemExit):
+        cli.delete_key("live", assume_yes=True)
+    err = capsys.readouterr().err
+    assert "still active" in err and "revoke-key" in err
+    # Never even attempts the DELETE.
+    assert not any(c["method"] == "DELETE" for c in calls)
