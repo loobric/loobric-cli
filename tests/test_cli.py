@@ -61,11 +61,35 @@ TOOLSET = {
                  "created_at": "t", "updated_at": "t"},
     "canonical": {
         "name": {"value": "Drawer A", "source": "asserted:human@web"},
-        "machine_id": {"value": None, "source": "unknown"},
         "members": [{"tool_record_id": "instanceid1",
                      "number": {"value": 3, "source": "asserted:human@web"}}],
     },
     "clients": {},
+}
+
+SETUP = {
+    "id": "mapid1", "machine_id": "machineid1", "tool_set_id": "setid1",
+    "status": "active", "activated_at": "2026-07-29T08:00:00",
+    "ended_at": None, "activated_by": "userid1", "activated_key": None,
+    "ended_by": None, "ended_key": None, "version": 1,
+}
+
+RECON = {
+    "machine_id": "machineid1", "active": True, "setup_id": "mapid1",
+    "tool_set_id": "setid1", "tool_set_name": "Drawer A", "ready": False,
+    "claims": [
+        {"tool_record_id": "instanceid1", "name": "1/4 downcut",
+         "number": {"value": 3, "source": "asserted:human@web"},
+         "observed": None, "state": "requested", "entry_id": None},
+    ],
+    "notes": [
+        {"entry_id": "slotid9", "number": {"value": 30,
+                                           "source": "observed:linuxcnc@haas"},
+         "state": "unlisted", "tool_record_id": "instanceid9",
+         "name": "touch probe", "description": None},
+    ],
+    "ambiguities": [],
+    "attention": {"important": 1, "notes": 1},
 }
 
 CATALOG = {
@@ -110,6 +134,10 @@ class Recorder:
         # the Client passes through make_request.
         self.calls.append({"method": method, "endpoint": endpoint, "body": body})
         if method == "GET":
+            if endpoint.startswith("/machine-set-maps/status"):
+                return RECON
+            if endpoint.startswith("/machine-set-maps"):
+                return {"items": [SETUP]}
             if endpoint.startswith("/machine-records"):
                 return {"items": [MACHINE]}
             if endpoint.startswith("/tool-instance-records"):
@@ -134,6 +162,10 @@ class Recorder:
                                   "entity_type": "tool_table_entry_record",
                                   "entity_id": "slotid1"}], "total_count": 1}
         if method == "POST":
+            if endpoint == "/machine-set-maps":
+                return SETUP
+            if endpoint.endswith("/end"):
+                return {**SETUP, "status": "ended", "ended_at": "t"}
             if endpoint == "/admin/wipe":
                 return {"wiped": True,
                         "deleted": {"users": 1, "api_keys": 1, "machine_records": 1}}
@@ -424,16 +456,75 @@ def test_resolve_slot_errors_when_tool_number_absent(api, capsys):
 
 
 # ---------------------------------------------------------------------------
-# Tool-set ↔ machine: link-machine.
+# Setups: use-set / status / setup-history (MAPPING_PLAN).
 # ---------------------------------------------------------------------------
 
-def test_link_machine_asserts_machine_id_on_the_set(api, capsys):
-    cli.link_machine("setid1", "machineid1")
+def test_use_set_activates_the_setup(api, capsys):
+    cli.use_set("machineid1", "setid1")
     post = api.last("POST")
-    assert post["endpoint"] == "/tool-set-records/setid1/assert"
-    assert post["body"]["path"] == "machine_id"
-    assert post["body"]["value"] == "machineid1"
-    assert "linked to machine" in capsys.readouterr().out
+    assert post["endpoint"] == "/machine-set-maps"
+    assert post["body"] == {"machine_id": "machineid1", "tool_set_id": "setid1"}
+    out = capsys.readouterr().out
+    assert "now set up for" in out
+    assert "Nothing on either side was changed" in out
+
+
+def test_use_set_none_ends_the_active_setup(api, capsys):
+    cli.use_set("machineid1", None, none=True)
+    post = api.last("POST")
+    assert post["endpoint"] == "/machine-set-maps/mapid1/end"
+    assert "Ended the active setup" in capsys.readouterr().out
+
+
+def test_status_renders_the_ratified_reference_shape(api, capsys):
+    """MAPPING_PLAN §10 Q1: headline `NOT READY (n need attention, m notes)`,
+    per-line state labels, notes below the fold."""
+    cli.setup_status("machineid1")
+    out = capsys.readouterr().out
+    assert "Haas Mini — Drawer A — NOT READY (1 need attention, 1 note)" in out
+    assert "T3" in out and "1/4 downcut" in out
+    assert "requested — not on machine" in out
+    assert "---- notes ----" in out
+    assert "touch probe" in out and "unlisted" in out
+
+
+def test_status_with_no_active_setup_points_at_use_set(monkeypatch, capsys):
+    def fake(method, endpoint, **kw):
+        if endpoint.startswith("/machine-set-maps/status"):
+            return {"machine_id": "machineid1", "active": False, "ready": None,
+                    "claims": [], "notes": [],
+                    "attention": {"important": 0, "notes": 0}}
+        if endpoint.startswith("/machine-records"):
+            return {"items": [MACHINE]}
+        return {"items": []}
+    monkeypatch.setattr(transport, "make_request", fake)
+    cli.setup_status("machineid1")
+    out = capsys.readouterr().out
+    assert "no active setup" in out
+    assert "use-set" in out
+
+
+def test_setup_history_lists_rows(api, capsys):
+    cli.setup_history("machineid1")
+    out = capsys.readouterr().out
+    assert "setup history" in out
+    assert "active" in out and "Drawer A" in out
+
+
+def test_add_to_set_with_number_claims_it(api, capsys):
+    cli.add_to_set("setid1", ["instanceid1"], number=12)
+    post = api.last("POST")
+    assert post["endpoint"] == "/tool-set-records/setid1/members"
+    (member,) = [m for m in post["body"]["members"]
+                 if m["tool_record_id"] == "instanceid1"]
+    assert member["number"] == 12
+    assert "claimed T12" in capsys.readouterr().out
+
+
+def test_add_to_set_number_requires_single_tool(api, capsys):
+    with pytest.raises(SystemExit):
+        cli.add_to_set("setid1", ["a", "b"], number=12)
+    assert "exactly one tool" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------
@@ -638,25 +729,28 @@ def test_show_machine_shows_table_and_provenance(api, capsys):
     assert "/tool-table-entry-records?machine_id=machineid1" in get_paths
 
 
-def test_show_machine_notes_linked_tool_sets(monkeypatch, capsys):
-    # A tool set whose canonical.machine_id points at this machine is reported.
-    linked = {**TOOLSET, "canonical": {**TOOLSET["canonical"],
-              "machine_id": {"value": "machineid1", "source": "asserted:human@web"}}}
+def test_show_machine_notes_active_setup(api, capsys):
+    # The machine's active setup (from /machine-set-maps) is reported by name.
+    cli.show_machine("machineid1")
+    out = capsys.readouterr().out
+    assert "Active setup: Drawer A" in out
 
+
+def test_show_machine_without_setup_points_at_use_set(monkeypatch, capsys):
     def fake(method, endpoint, **kw):
         if method == "GET":
+            if endpoint.startswith("/machine-set-maps"):
+                return {"items": []}
             if endpoint.startswith("/machine-records"):
                 return {"items": [MACHINE]}
-            if endpoint == "/tool-set-records":
-                return {"items": [linked]}
             if endpoint.startswith("/tool-table-entry-records"):
                 return {"items": [ENTRY]}
-        return {}
+        return {"items": []}
     monkeypatch.setattr(transport, "make_request", fake)
     cli.show_machine("machineid1")
     out = capsys.readouterr().out
-    assert "Drawer A" in out
-    assert "linked" in out.lower()
+    assert "Active setup: none" in out
+    assert "use-set" in out
 
 
 def test_show_machine_errors_on_no_match(api, capsys):
@@ -781,7 +875,9 @@ def test_list_keys_shows_revoked_state(monkeypatch, capsys):
     lambda: cli.unbind_entry("machineid1", 3),
     lambda: cli.create_record_from_entry("machineid1", 3, name="x"),
     lambda: cli.create_record_from_catalog("catalogid1"),
-    lambda: cli.link_machine("setid1", "machineid1"),
+    lambda: cli.use_set("machineid1", "setid1"),
+    lambda: cli.setup_status("machineid1"),
+    lambda: cli.setup_history("machineid1"),
     lambda: cli.create_machine("millstone", controller="linuxcnc"),
     lambda: cli.create_set("Drawer A"),
     lambda: cli.add_to_set("setid1", ["instanceid1"]),

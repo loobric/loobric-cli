@@ -249,12 +249,14 @@ def show_tool_set(set_handle):
     print(f"\nTool Set {_rid(s)}")
     print("=" * 78)
     print(f"  Name: {_cval(s, 'name') or '(unnamed)'}")
-    machine = _cval(s, "machine_id")
-    if machine:
-        mname = {_rid(m): _cval(m, "name") for m in _client().list_machines()}.get(machine)
-        print(f"  Machine: {mname or str(machine)[:8]} (member numbers inherited)")
+    active_on = [r["machine_id"] for r in _client().list_setups(status="active")
+                 if r["tool_set_id"] == _rid(s)]
+    if active_on:
+        mnames = {_rid(m): _cval(m, "name") for m in _client().list_machines()}
+        where = ", ".join(mnames.get(mid) or mid[:8] for mid in active_on)
+        print(f"  Active setup on: {where} — see `loobric status`")
     else:
-        print("  Machine: not linked")
+        print("  Active setup on: no machine — every number is provisional")
     print(f"  Members: {len(members)}")
     if not members:
         print("  (none yet — add tools with 'loobric add-to-set')")
@@ -274,19 +276,32 @@ def show_tool_set(set_handle):
         ndisp = f"T{num['value']}" if num.get("value") is not None else "(no #)"
         dia = _cval(t, "geometry", "diameter") if t else None
         extra = f"  ⌀{dia}" if dia is not None else ""
-        print(f"  {ndisp:>6}  {tname}{extra}  [{num.get('source', 'unknown')}]")
+        state = m.get("state")
+        badge = "" if state is None else (
+            "  ✓ ok" if state == "satisfied" else f"  ⚠ {state}")
+        print(f"  {ndisp:>6}  {tname}{extra}  [{num.get('source', 'unknown')}]{badge}")
     print("=" * 78)
 
 
-def add_to_set(set_handle, tools):
-    """Add one or more tools to a tool set (existing members are kept)."""
+def add_to_set(set_handle, tools, number: Optional[int] = None):
+    """Add one or more tools to a tool set (existing members are kept).
+
+    --number N claims tool number N for the tool — the durable CAM↔CNC
+    contract the machine's status view reconciles against. One tool only:
+    a claim names one position."""
+    if number is not None and len(tools) != 1:
+        print("Error: --number claims a position for exactly one tool",
+              file=sys.stderr)
+        sys.exit(1)
     s = _resolve_tool_set(set_handle)
     recs = [_resolve_record(t) for t in tools]
-    updated = _client().add_to_set(_rid(s), [_rid(r) for r in recs])
+    numbers = {_rid(recs[0]): number} if number is not None else None
+    updated = _client().add_to_set(_rid(s), [_rid(r) for r in recs], numbers=numbers)
     n = len((updated.get("canonical") or {}).get("members") or [])
     label = _cval(s, "name") or str(_rid(s))[:8]
     names = ", ".join(_cval(r, "name") or str(_rid(r))[:8] for r in recs)
-    print(f"✓ Added {len(recs)} tool(s) to '{label}' — {names}. Now {n} member(s).")
+    claim = f" (claimed T{number})" if number is not None else ""
+    print(f"✓ Added {len(recs)} tool(s) to '{label}' — {names}{claim}. Now {n} member(s).")
 
 
 def remove_from_set(set_handle, tools):
@@ -571,13 +586,107 @@ def show_tool_table(machine_id: str):
     print("=" * 78)
 
 
-def link_machine(set_id: str, machine_id: str, actor: str = "human@cli"):
-    """Link a tool set to a machine: member numbers are inherited from its entries."""
-    tool_set = _resolve_tool_set(set_id)
-    machine = _resolve_machine(machine_id)
-    _client().link_set_to_machine(_rid(tool_set), _rid(machine), actor)
+def use_set(machine_handle: str, set_handle: Optional[str], none: bool = False):
+    """`use-set`: make a tool set the machine's active setup (or --none to end).
+
+    Activation changes NOTHING on either side — no entry, binding, member, or
+    number; it only changes what the machine's status view compares against.
+    The previous setup ends automatically and survives as history."""
+    machine = _resolve_machine(machine_handle)
+    m_name = _cval(machine, "name")
+    c = _client()
+    if none:
+        current = c.active_setup(_rid(machine))
+        if current is None:
+            print(f"'{m_name}' has no active setup.")
+            return
+        c.end_setup(current["id"])
+        print(f"✓ Ended the active setup on '{m_name}'. Nothing else changed.")
+        return
+    tool_set = _resolve_tool_set(set_handle)
+    c.use_set(_rid(machine), _rid(tool_set))
     set_name = _cval(tool_set, "name") or str(_rid(tool_set))[:8]
-    print(f"✓ Tool set '{set_name}' now linked to machine '{_cval(machine, 'name')}'.")
+    print(f"✓ '{m_name}' is now set up for '{set_name}'. Nothing on either side "
+          f"was changed — see `loobric status {machine_handle}` for the diff.")
+
+
+def _fmt_number(field) -> str:
+    v = (field or {}).get("value")
+    return f"T{v}" if v is not None else "?"
+
+
+def setup_status(machine_handle: str):
+    """`status`: the machine's setup view — ready / needs attention / notes.
+
+    Display only: Loobric never gates anything. Resolution happens through
+    normal channels (mount, unload, edit the CAM library) and sync catches up;
+    the one software act is confirming identity (`pending`/`resolve`/`bind`)."""
+    machine = _resolve_machine(machine_handle)
+    m_name = _cval(machine, "name")
+    doc = _client().reconciliation(_rid(machine))
+    if not doc.get("active"):
+        print(f"{m_name} — no active setup.")
+        print(f"Pick one with: loobric use-set {machine_handle} <set>")
+        return
+    att = doc.get("attention") or {}
+    important, notes_n = att.get("important", 0), att.get("notes", 0)
+    headline = ("READY" if doc.get("ready")
+                else f"NOT READY ({important} need attention, {notes_n} note"
+                     f"{'s' if notes_n != 1 else ''})")
+    print(f"{m_name} — {doc.get('tool_set_name') or '(unnamed set)'} — {headline}")
+    print()
+
+    def _line(num: str, name: str, state: str):
+        print(f"  {num:<5}{name:<22}{state}")
+
+    for cl in sorted(doc.get("claims") or [],
+                     key=lambda c: ((c.get("number") or {}).get("value") is None,
+                                    (c.get("number") or {}).get("value") or 0)):
+        num = _fmt_number(cl.get("number"))
+        name = cl.get("name") or cl.get("tool_record_id", "")[:8]
+        state = cl.get("state")
+        obs = (cl.get("observed") or {}).get("value")
+        claimed = (cl.get("number") or {}).get("value")
+        if state == "satisfied":
+            detail = "ok"
+        elif state == "blocked":
+            who = (cl.get("blocked_by") or {}).get("name") or "another tool"
+            detail = f"blocked — T{claimed} occupied by '{who}'"
+        elif state == "pending bind":
+            detail = "pending bind — mounted, confirm identity"
+        elif state == "requested":
+            detail = "requested — not on machine"
+        elif state == "mismounted":
+            detail = f"mismounted — CAM says T{claimed}; machine has it at T{obs}"
+        else:
+            detail = state or ""
+        _line(num, name, detail)
+    notes = doc.get("notes") or []
+    if notes:
+        print("  ---- notes ----")
+        for n in sorted(notes, key=lambda n: (n.get("number") or {}).get("value") or 0):
+            num = _fmt_number(n.get("number"))
+            name = n.get("name") or n.get("description") or "—"
+            _line(num, name, n.get("state") or "")
+
+
+def setup_history(machine_handle: str):
+    """`setup-history`: which tool sets this machine ran, when, started by whom."""
+    machine = _resolve_machine(machine_handle)
+    m_name = _cval(machine, "name")
+    rows = _client().list_setups(machine_id=_rid(machine))
+    if not rows:
+        print(f"'{m_name}' has no setup history.")
+        return
+    set_names = {_rid(s): _cval(s, "name") for s in _client().list_tool_sets()}
+    print(f"\n{m_name} setup history ({len(rows)}):")
+    print("=" * 78)
+    for r in rows:
+        name = set_names.get(r["tool_set_id"]) or r["tool_set_id"][:8]
+        span = (r.get("activated_at") or "")[:16] + " -> " + \
+               (((r.get("ended_at") or "")[:16]) or "now")
+        print(f"  {r['status']:<7} {name:<28} {span}")
+    print("=" * 78)
 
 
 def delete_machine(machine_id: str, assume_yes: bool = False):
@@ -964,6 +1073,13 @@ def show_machine(machine_handle):
         leaf = canonical.get(key)
         if isinstance(leaf, dict) and "source" in leaf:
             _print_field(key, leaf)
+    for section in ("spindle", "coolant"):
+        present = {k: v for k, v in (canonical.get(section) or {}).items()
+                   if isinstance(v, dict) and "source" in v}
+        if present:
+            print(f"  {section}:")
+            for key, leaf in present.items():
+                _print_field(key, leaf, indent="    ")
     entries = _client().list_entries(_rid(machine))
     plural = "entries" if len(entries) != 1 else "entry"
     print(f"  Tool table: {len(entries)} {plural}")
@@ -971,13 +1087,14 @@ def show_machine(machine_handle):
         rec_id = _cval(e, "bound_instance_id")
         state = f"bound -> {str(rec_id)[:8]}" if rec_id else "unbound"
         print(f"    T{_cval(e, 'tool_number')}: {_cval(e, 'description') or '—'}  [{state}]")
-    linked = [s for s in _client().list_tool_sets()
-              if _cval(s, "machine_id") == _rid(machine)]
-    if linked:
-        plural = "sets" if len(linked) != 1 else "set"
-        print(f"  Tool {plural} linked: {len(linked)}")
-        for s in linked:
-            print(f"    {_cval(s, 'name') or str(_rid(s))[:8]}")
+    setup = _client().active_setup(_rid(machine))
+    if setup:
+        names = {_rid(s): _cval(s, "name") for s in _client().list_tool_sets()}
+        sname = names.get(setup["tool_set_id"]) or setup["tool_set_id"][:8]
+        print(f"  Active setup: {sname} (since {(setup.get('activated_at') or '')[:16]})"
+              f" — see `loobric status`")
+    else:
+        print("  Active setup: none — `loobric use-set` to pick one")
     print("=" * 78)
 
 
@@ -1246,14 +1363,15 @@ def backup_import(path):
     print(f"✓ Backup imported from {path}.")
 
 
-def assert_canonical(resource, record_id, path, value, actor="human@cli"):
+def assert_canonical(resource, record_id, path, value, actor="human@cli", unit=None):
     """Assert a canonical field (the assert door): loobric assert <resource> <id> <path> <value>."""
     try:
         parsed = json.loads(value)
     except (json.JSONDecodeError, TypeError):
         parsed = value
-    rec = _client().assert_field(resource, record_id, path, parsed, actor=actor)
-    print(f"✓ Asserted {path}={parsed!r} on {resource}/{str(_rid(rec))[:8]}.")
+    rec = _client().assert_field(resource, record_id, path, parsed, actor=actor, unit=unit)
+    disp = f"{parsed!r} {unit}" if unit else f"{parsed!r}"
+    print(f"✓ Asserted {path}={disp} on {resource}/{str(_rid(rec))[:8]}.")
 
 
 def ping():
@@ -1364,9 +1482,12 @@ def main():
   loobric pending                       # binding proposals awaiting review
   loobric audit --limit 20
 
-  # Tool sets
+  # Tool sets & setups
   loobric create-set "Aluminum job"
-  loobric link-machine "Aluminum job" millstone
+  loobric add-to-set "Aluminum job" "1/4 downcut" --number 12
+  loobric use-set millstone "Aluminum job"   # the machine's active setup
+  loobric status millstone                   # ready / needs attention / notes
+  loobric setup-history millstone
 
   # Canonical assert door
   loobric assert tool-set-records <id> name "Aluminum job v2"
@@ -1499,16 +1620,44 @@ Environment Variables:
     show_tool_set_parser.add_argument("set", help="Tool set id, name, or unique prefix")
     show_tool_set_parser.set_defaults(func=lambda args: show_tool_set(args.set))
 
-    # === link-machine ===
-    link_parser = subparsers.add_parser(
-        "link-machine",
-        help="Link a tool set to a machine",
-        description="Assert a tool set's machine_id so its member numbers are "
-                    "inherited from that machine's tool table."
+    # === use-set / status / setup-history (setups) ===
+    use_set_parser = subparsers.add_parser(
+        "use-set",
+        help="Make a tool set the machine's active setup (or --none to end)",
+        description="Tell Loobric which tool set the machine is being set up "
+                    "for. Changes NOTHING on either side — it only changes what "
+                    "`status` compares against. The previous setup ends "
+                    "automatically and survives as history.",
     )
-    link_parser.add_argument("set", help="Tool set id or unique prefix")
-    link_parser.add_argument("machine", help="Machine id or unique prefix")
-    link_parser.set_defaults(func=lambda args: link_machine(args.set, args.machine))
+    use_set_parser.add_argument("machine", help="Machine id, name, or unique prefix")
+    use_set_parser.add_argument("set", nargs="?",
+                                help="Tool set id, name, or unique prefix")
+    use_set_parser.add_argument("--none", action="store_true",
+                                help="End the active setup without a replacement")
+    use_set_parser.set_defaults(func=lambda args: (
+        use_set(args.machine, args.set, none=args.none)
+        if (args.none or args.set) else
+        use_set_parser.error("provide a SET or --none")))
+
+    status_parser = subparsers.add_parser(
+        "status",
+        help="The machine's setup view: ready / needs attention / notes",
+        description="Compare the machine's tool table against its active "
+                    "setup's claims. READY = every claimed tool is mounted, at "
+                    "the claimed number, with confirmed identity. Notes are "
+                    "informational only and never block readiness. Loobric "
+                    "never gates anything — fix lines through normal channels "
+                    "(mount/unload/edit the CAM library) and sync catches up.",
+    )
+    status_parser.add_argument("machine", help="Machine id, name, or unique prefix")
+    status_parser.set_defaults(func=lambda args: setup_status(args.machine))
+
+    setup_history_parser = subparsers.add_parser(
+        "setup-history",
+        help="Which tool sets this machine ran, when, started by whom",
+    )
+    setup_history_parser.add_argument("machine", help="Machine id, name, or unique prefix")
+    setup_history_parser.set_defaults(func=lambda args: setup_history(args.machine))
 
     # === pending / resolve (v2 inbox) ===
     pending_parser = subparsers.add_parser(
@@ -1677,7 +1826,12 @@ Environment Variables:
     add_to_set_parser.add_argument("set", help="Tool set id, name, or unique prefix")
     add_to_set_parser.add_argument("tool", nargs="+",
                                    help="Tool record id(s), name(s), or unique prefix(es)")
-    add_to_set_parser.set_defaults(func=lambda args: add_to_set(args.set, args.tool))
+    add_to_set_parser.add_argument(
+        "--number", type=int,
+        help="Claim this tool number for the tool (one tool only) — the "
+             "durable CAM↔CNC contract `status` reconciles against")
+    add_to_set_parser.set_defaults(
+        func=lambda args: add_to_set(args.set, args.tool, number=args.number))
 
     remove_from_set_parser = subparsers.add_parser(
         "remove-from-set", help="Remove one or more tools from a tool set",
@@ -1834,8 +1988,10 @@ Environment Variables:
     assert_parser.add_argument("record_id", help="Record id")
     assert_parser.add_argument("path", help="Canonical path, e.g. name")
     assert_parser.add_argument("value", help="Value (JSON-parsed if possible, else string)")
+    assert_parser.add_argument("--unit", help="Unit for the value, e.g. rpm, kW, mm")
     assert_parser.set_defaults(
-        func=lambda args: assert_canonical(args.resource, args.record_id, args.path, args.value))
+        func=lambda args: assert_canonical(args.resource, args.record_id, args.path,
+                                           args.value, unit=args.unit))
 
     # === import (format importers) ===
     import_parser = subparsers.add_parser(

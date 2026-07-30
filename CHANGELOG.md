@@ -3,6 +3,34 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] — 2026-07-29 (BREAKING: pairs with loobric-server 0.7.0)
+
+### Added
+- **Setups** (MAPPING_PLAN.md): `loobric use-set MACHINE SET` makes a tool set
+  the machine's active setup (`--none` ends it); `loobric status MACHINE`
+  renders the ratified view — `READY` / `NOT READY (n need attention, m
+  notes)` with per-line states (`ok`, `requested`, `mismounted`, `blocked`,
+  `pending bind`; notes: `unlisted`, `unknown tool`); `loobric setup-history
+  MACHINE` lists the machine's setup rows. Client library: `use_set`,
+  `end_setup`, `list_setups`, `active_setup`, `reconciliation`.
+- **`add-to-set --number N`** — claim a tool number for a member (the durable
+  CAM↔CNC contract `status` checks the machine against). Client
+  `add_to_set(..., numbers={id: n})`.
+- MCP: `machine_setup_status` (read-only setup view) and `numbers` on
+  `add_to_tool_set`. Switching setups stays beyond agent keys (bind door).
+- **Units on the assert door.** `loobric assert … --unit rpm` and an optional
+  `unit` argument on the MCP `assert_field` tool / `LoobricClient.assert_field`,
+  for the new server-side machine capability fields (`spindle.max_rpm`,
+  `spindle.power`, …) where a bare number is ambiguous.
+- **`loobric show machine` prints spindle/coolant capability** sections with
+  per-field provenance when present.
+
+### Removed (BREAKING)
+- `loobric link-machine` and `Client.link_set_to_machine` — the set↔machine
+  link is no longer a set field; use `use-set`. The MCP
+  `link_tool_set_to_machine` tool is gone for the same reason (and agents
+  could not hold the new verb's door anyway).
+
 ## [1.3.1] — 2026-07-27
 
 ### Fixed

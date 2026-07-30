@@ -57,9 +57,37 @@ class Client:
     def delete_tool_set(self, record_id: str) -> Dict[str, Any]:
         return self._call("DELETE", f"/tool-set-records/{record_id}")
 
-    def link_set_to_machine(self, set_id: str, machine_id: str,
-                            actor: str = "human@cli") -> Dict[str, Any]:
-        return self.assert_field("tool-set-records", set_id, "machine_id", machine_id, actor)
+    # -- setups (the transitory machine↔set relationship) --------------------
+    def use_set(self, machine_id: str, tool_set_id: str) -> Dict[str, Any]:
+        """Make `tool_set_id` the machine's active setup (atomically ending any
+        prior one; its row survives as history). Requires the `bind` door."""
+        return self._call("POST", "/machine-set-maps",
+                          body={"machine_id": machine_id, "tool_set_id": tool_set_id})
+
+    def end_setup(self, setup_id: str) -> Dict[str, Any]:
+        """End a setup without a replacement (`use-set --none`)."""
+        return self._call("POST", f"/machine-set-maps/{setup_id}/end")
+
+    def list_setups(self, machine_id: Optional[str] = None,
+                    status: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Setup rows, newest first — the active one or a machine's history."""
+        params = []
+        if machine_id:
+            params.append(f"machine_id={machine_id}")
+        if status:
+            params.append(f"status={status}")
+        qs = ("?" + "&".join(params)) if params else ""
+        return self._call("GET", f"/machine-set-maps{qs}").get("items", [])
+
+    def active_setup(self, machine_id: str) -> Optional[Dict[str, Any]]:
+        """The machine's active setup row, or None."""
+        rows = self.list_setups(machine_id=machine_id, status="active")
+        return rows[0] if rows else None
+
+    def reconciliation(self, machine_id: str) -> Dict[str, Any]:
+        """The machine's derived setup view: ready, claims, notes."""
+        return self._call(
+            "GET", f"/machine-set-maps/status?machine_id={machine_id}")
 
     def set_members(self, set_id: str, members: List[Dict[str, Any]],
                     actor: str = "human@cli") -> Dict[str, Any]:
@@ -80,15 +108,22 @@ class Client:
         return out
 
     def add_to_set(self, set_id: str, tool_record_ids: List[str],
-                   actor: str = "human@cli") -> Dict[str, Any]:
+                   actor: str = "human@cli",
+                   numbers: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
         """Add tool record(s) to a set, keeping existing members and their
         numbers. Tools already in the set are skipped — membership is a set, not
-        a bag. Read-modify-write over the replace-only members door."""
+        a bag — unless `numbers` claims a number for them, which re-asserts it.
+        `numbers` maps tool_record_id → claimed tool number (the CAM↔CNC
+        contract; MAPPING_PLAN §5.1). Read-modify-write over the members door."""
+        numbers = numbers or {}
         members = self._member_payload(set_id)
         have = {m["tool_record_id"] for m in members}
+        for m in members:
+            if m["tool_record_id"] in numbers:
+                m["number"] = numbers[m["tool_record_id"]]
         for tid in tool_record_ids:
             if tid not in have:
-                members.append({"tool_record_id": tid, "number": None})
+                members.append({"tool_record_id": tid, "number": numbers.get(tid)})
                 have.add(tid)
         return self.set_members(set_id, members, actor)
 
@@ -183,9 +218,12 @@ class Client:
 
     # -- the canonical 'assert' door ----------------------------------------
     def assert_field(self, resource: str, record_id: str, path: str, value: Any,
-                     actor: str = "human@cli") -> Dict[str, Any]:
-        return self._call("POST", f"/{resource}/{record_id}/assert",
-                          body={"path": path, "value": value, "actor": actor})
+                     actor: str = "human@cli",
+                     unit: Optional[str] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"path": path, "value": value, "actor": actor}
+        if unit is not None:
+            body["unit"] = unit
+        return self._call("POST", f"/{resource}/{record_id}/assert", body=body)
 
     # -- inbox ---------------------------------------------------------------
     def list_inbox(self) -> List[Dict[str, Any]]:

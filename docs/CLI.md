@@ -258,11 +258,15 @@ client name on the push (default `loobric`). `--snapshot` makes the push
 authoritative — entries absent from it are removed — and the removed tool
 numbers are printed. Prints how many entries were pushed.
 
-### Tool sets
+### Tool sets & setups
 
-A tool set is a named collection of tool records. It can optionally be **linked**
-to a machine (see `link-machine`); once linked, its member numbers are inherited
-from that machine's tool-table entries.
+A tool set is a named collection of tool records — purely CAM-owned. Each
+member's **number** is the CAM side's durable *claim* (the T-number posted
+G-code will call); it is only ever changed by an assert, never overwritten by
+the machine. A machine runs at most one set at a time as its **active setup**
+(see `use-set`); `status` shows whether machine reality matches the active
+set's claims. Loobric never gates anything — the flags inform, and resolution
+happens through normal channels (mount, unload, edit the CAM library).
 
 #### `create-set`
 
@@ -288,14 +292,17 @@ is the drill-in.
 #### `add-to-set`
 
 ```
-loobric add-to-set SET TOOL [TOOL ...]
+loobric add-to-set SET TOOL [TOOL ...] [--number N]
 ```
 
 Add one or more tool records to a set. `SET` and each `TOOL` resolve by id,
 name, or unique prefix. Existing members (and their numbers) are kept, and a
-tool already in the set is skipped — membership is a set, not a bag. New members
-have no number until the set is linked to a machine (or one is asserted). Prints
-the tools added and the resulting member count.
+tool already in the set is skipped — membership is a set, not a bag.
+`--number N` claims tool number `N` for the tool (exactly one `TOOL` in that
+case): this is the durable CAM↔CNC contract that `status` checks the machine
+against, and the number CAM should program. A member without a claim is
+honestly unnumbered until one is asserted. Prints the tools added (and the
+claim) and the resulting member count.
 
 #### `remove-from-set`
 
@@ -311,16 +318,58 @@ resulting member count.
 > (`POST /tool-set-records/{id}/members`): they read current membership, apply
 > the change, and write the full list back.
 
-#### `link-machine`
+#### `use-set`
 
 ```
-loobric link-machine SET MACHINE
+loobric use-set MACHINE SET
+loobric use-set MACHINE --none
 ```
 
-Link a tool set to a machine so its member numbers are inherited from that
-machine's tool-table entries. `SET` and `MACHINE` accept an id, name, or unique
-prefix. This asserts the set's `machine_id`. Prints a confirmation naming the set
-and the machine it is now linked to.
+Make `SET` the machine's active setup — telling Loobric which tool set the
+machine is being set up for. The previous setup (if any) ends automatically and
+survives as history (`setup-history`). Activation changes **nothing** on either
+side — no entry, no binding, no member, no number; it only changes what
+`status` compares against. `--none` ends the active setup without a
+replacement. Requires the `bind` scope: agent keys and bare controller sync
+keys cannot switch setups.
+
+#### `status`
+
+```
+loobric status MACHINE
+```
+
+The machine's setup view. The headline is **READY** when every claimed tool is
+mounted, at the claimed number, with confirmed identity — the exact scope of
+the word; it says nothing about offsets sanity or tool life. Otherwise
+`NOT READY (n need attention, m notes)` with one line per claim:
+
+```
+millstone — bracket-job — NOT READY (2 need attention, 2 notes)
+
+  T3   6mm endmill      ok
+  T5   50mm face mill   blocked — T5 occupied by '20mm slot mill'
+  T12  3mm drill        pending bind — mounted, confirm identity
+  T14  90° chamfer      requested — not on machine
+  ---- notes ----
+  T30  touch probe      unlisted
+  T8   —                unknown tool
+```
+
+Lines above the fold are unmet claims (important); **notes** are table rows the
+set doesn't claim — real differences, informational only, never counted
+against readiness. Nothing here is a task: pending lines are facts, fixed
+through normal channels, except identity (`pending` / `resolve` / `bind`),
+which is the one act only Loobric can record.
+
+#### `setup-history`
+
+```
+loobric setup-history MACHINE
+```
+
+Which tool sets this machine ran, when, and their status — every `use-set` is
+a durable row, never deleted.
 
 ### Catalog records
 

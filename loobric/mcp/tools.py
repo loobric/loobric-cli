@@ -170,7 +170,8 @@ def _assert_field(client, args):
             "assertions. Tell the user — a human can override via the CLI or "
             "Web UI if the measurement really is wrong.")
     return client.assert_field(resource, args["record_id"], args["path"],
-                               args["value"], actor=agent_actor())
+                               args["value"], actor=agent_actor(),
+                               unit=args.get("unit"))
 
 
 def _query_audit_logs(client, args):
@@ -317,12 +318,22 @@ TOOLS: List[ToolSpec] = [
                                        actor=agent_actor())),
     ToolSpec(
         "add_to_tool_set",
-        "Add tool instance records to a ToolSet by id.",
+        "Add tool instance records to a ToolSet by id. `numbers` optionally "
+        "claims a tool number per record id — the durable CAM↔CNC contract "
+        "the machine's setup status is derived from (an assert; allowed "
+        "for agents). Claiming a number never mounts anything: the machine "
+        "side stays untouched until an operator acts.",
         _schema({"set_id": {"type": "string"},
                  "tool_record_ids": {"type": "array",
-                                     "items": {"type": "string"}}},
+                                     "items": {"type": "string"}},
+                 "numbers": {"type": "object",
+                             "description": "Map of tool_record_id -> claimed "
+                                            "tool number (integer).",
+                             "additionalProperties": {"type": "integer"}}},
                 ["set_id", "tool_record_ids"]),
-        lambda c, a: c.add_to_set(a["set_id"], a["tool_record_ids"])),
+        lambda c, a: c.add_to_set(a["set_id"], a["tool_record_ids"],
+                                  actor=agent_actor(),
+                                  numbers=a.get("numbers"))),
     ToolSpec(
         "remove_from_tool_set",
         "Remove tool instance records from a ToolSet by id.",
@@ -332,13 +343,16 @@ TOOLS: List[ToolSpec] = [
                 ["set_id", "tool_record_ids"]),
         lambda c, a: c.remove_from_set(a["set_id"], a["tool_record_ids"])),
     ToolSpec(
-        "link_tool_set_to_machine",
-        "Link a ToolSet to a Machine; member numbers are then inherited from "
-        "the machine's tool table entries.",
-        _schema({"set_id": {"type": "string"},
-                 "machine_id": {"type": "string"}},
-                ["set_id", "machine_id"]),
-        lambda c, a: c.link_set_to_machine(a["set_id"], a["machine_id"])),
+        "machine_setup_status",
+        "The machine's setup view (read-only): which ToolSet is its active "
+        "setup, whether it is READY (every claimed tool mounted, at the "
+        "claimed number, identity confirmed), the unmet claims "
+        "(requested / mismounted / blocked / pending bind), and informational "
+        "notes (unlisted / unknown tools). Switching a machine's setup is an "
+        "operator act (`loobric use-set`, bind door) — agent keys cannot do "
+        "it, by design.",
+        _schema({"machine_id": {"type": "string"}}, ["machine_id"]),
+        lambda c, a: c.reconciliation(a["machine_id"])),
     ToolSpec(
         "attach_media_from_url",
         "Attach a media file to a record's canonical media by downloading "
@@ -383,8 +397,13 @@ TOOLS: List[ToolSpec] = [
                  "record_id": {"type": "string"},
                  "path": {"type": "string",
                           "description": "Dotted canonical path, e.g. "
-                                         "'name' or 'geometry.diameter'."},
-                 "value": {"description": "The value to declare."}},
+                                         "'name', 'geometry.diameter', or a "
+                                         "machine capability field like "
+                                         "'spindle.max_rpm' or 'coolant.flood'."},
+                 "value": {"description": "The value to declare."},
+                 "unit": {"type": "string",
+                          "description": "Optional unit for the value, e.g. "
+                                         "'rpm', 'kW', 'mm'."}},
                 ["resource", "record_id", "path", "value"]),
         _assert_field),
 ]
