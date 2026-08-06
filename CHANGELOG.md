@@ -3,6 +3,18 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] — 2026-08-01
+
+### Added
+- **`Client.key_info()` — credential introspection** (server ≥ 0.8.0,
+  loobric-server #44): what may the presented key actually do? Returns the
+  key's audit identity (`channel` + `api_key_id`), name, **effective** door
+  scopes, and explicit `read_only` / `legacy` flags — needs nothing beyond a
+  valid credential, so a read-only key can learn it is read-only without
+  provoking a 403. `loobric whoami` now shows the block when authed with an
+  API key ("Key: … / Scopes: read — read-only", with the legacy degradation
+  called out and its fix named). Older servers: the block is simply absent.
+
 ## [1.4.1] — 2026-07-30 (lessons from the first setups-era field sessions)
 
 ### Fixed

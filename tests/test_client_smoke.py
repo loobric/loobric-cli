@@ -32,6 +32,21 @@ def test_patching_transport_make_request_intercepts(monkeypatch):
     assert seen["call"][0] == "GET"
 
 
+def test_key_info_hits_auth_key():
+    calls = []
+
+    def fake(method, endpoint, **kw):
+        calls.append((method, endpoint))
+        return {"channel": "api-key", "api_key_id": "k1",
+                "name": "shop", "scopes": ["read"],
+                "read_only": True, "legacy": False,
+                "user_id": "u1", "email": "e@x"}
+
+    info = Client(base_url="http://example", transport=fake).key_info()
+    assert calls == [("GET", "/auth/key")]
+    assert info["read_only"] is True
+
+
 def test_error_hierarchy_exported():
     assert issubclass(NotFound, LoobricClientError)
     assert issubclass(AuthRequired, LoobricClientError)

@@ -1333,6 +1333,24 @@ def whoami():
     print(f"  Admin:  {me.get('is_admin')}")
     if me.get("id"):
         print(f"  ID:     {me.get('id')}")
+    # Credential introspection (server ≥ 0.8.0): when authed with an API key,
+    # say which key, its effective door scopes, and whether it can write —
+    # the answer a client otherwise learns from a 403 after the fact.
+    try:
+        info = client.key_info()
+    except (NotFound, LoobricClientError):
+        info = None
+    if info and info.get("channel") == "api-key":
+        print(f"  Key:    {info.get('name') or '(unnamed)'}  "
+              f"[{info.get('api_key_id', '?')}]")
+        scopes = " ".join(info.get("scopes") or [])
+        if info.get("legacy"):
+            print(f"  Scopes: {scopes} — LEGACY key (pre-0.6.0), degraded to "
+                  f"read-only; create a new key (`loobric create-key --preset …`)")
+        elif info.get("read_only"):
+            print(f"  Scopes: {scopes} — read-only")
+        else:
+            print(f"  Scopes: {scopes}")
     # Server build identity — an older server has no /version endpoint, which is
     # itself the answer to "is it running my code?"
     try:
