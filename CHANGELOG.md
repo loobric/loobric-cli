@@ -3,7 +3,7 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.7.0] — 2026-08-16
 
 ### Added
 - **Completeness pass** (audit 2026-08-16 — the library and CLI had

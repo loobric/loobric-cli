@@ -1,6 +1,6 @@
 [project]
 name = "loobric-cli"
-version = "1.6.0"
+version = "1.7.0"
 description = "Python client library and CLI for Loobric Core (CNC tool-data sync)."
 readme = "README.md"
 requires-python = ">=3.9"
