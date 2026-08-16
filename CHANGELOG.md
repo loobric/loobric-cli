@@ -3,6 +3,18 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- **Catalog verbs target the v2 Catalog entity** (server ≥ 0.14.0):
+  `list_catalogs` / `get_catalog` / `create_catalog(name)` /
+  `rename_catalog` / `set_catalog_members` / `delete_catalog` against
+  `/api/v1/catalogs` — named collections of catalog records, membership
+  is organization never identity. The v1 manufacturer-catalog verbs they
+  replace (`catalog_analytics`, kwargs-shaped `create_catalog`,
+  `update_catalog`) pointed at a route whose contract changed with the
+  v1 rip-out; analytics is gone with it.
+
 ## [1.6.0] — 2026-08-16
 
 ### Added

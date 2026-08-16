@@ -436,21 +436,37 @@ class Client:
     def update_user_roles(self, user_id: str, **fields) -> Dict[str, Any]:
         return self._call("PATCH", f"/users/{user_id}/roles", body=dict(fields))
 
-    # -- manufacturer catalogs ----------------------------------------------
-    def list_catalogs(self) -> Any:
-        return self._call("GET", "/catalogs")
+    # -- catalogs: named collections of catalog records (server >= 0.14.0;
+    #    replaces the v1 manufacturer-catalog verbs, whose /catalogs route
+    #    now serves this entity — analytics and PATCH are gone with v1) ----
+    def list_catalogs(self) -> List[Dict[str, Any]]:
+        return self._call("GET", "/catalogs").get("items", [])
 
     def get_catalog(self, catalog_id: str) -> Dict[str, Any]:
         return self._call("GET", f"/catalogs/{catalog_id}")
 
-    def catalog_analytics(self, catalog_id: str) -> Dict[str, Any]:
-        return self._call("GET", f"/catalogs/{catalog_id}/analytics")
+    def create_catalog(self, name: str,
+                       actor: str = "human@cli") -> Dict[str, Any]:
+        """Create a named, empty catalog. Membership is organization, never
+        identity — see set_catalog_members."""
+        return self._call("POST", "/catalogs",
+                          body={"name": name, "actor": actor})
 
-    def create_catalog(self, **fields) -> Dict[str, Any]:
-        return self._call("POST", "/catalogs", body=dict(fields))
+    def rename_catalog(self, catalog_id: str, name: str,
+                       actor: str = "human@cli") -> Dict[str, Any]:
+        return self._call("POST", f"/catalogs/{catalog_id}/rename",
+                          body={"name": name, "actor": actor})
 
-    def update_catalog(self, catalog_id: str, **fields) -> Dict[str, Any]:
-        return self._call("PATCH", f"/catalogs/{catalog_id}", body=dict(fields))
+    def set_catalog_members(self, catalog_id: str, record_ids: List[str],
+                            actor: str = "human@cli") -> Dict[str, Any]:
+        """Replace the catalog's members (catalog-record ids). Records may
+        sit in any number of catalogs; unknown ids are a 400 naming them."""
+        return self._call("POST", f"/catalogs/{catalog_id}/members",
+                          body={"members": list(record_ids), "actor": actor})
+
+    def delete_catalog(self, catalog_id: str) -> Dict[str, Any]:
+        """Delete a catalog. Its records STAY — organization, not identity."""
+        return self._call("DELETE", f"/catalogs/{catalog_id}")
 
     # -- audit log -----------------------------------------------------------
     def query_audit_logs(self, operation: Optional[str] = None,
