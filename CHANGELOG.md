@@ -3,7 +3,7 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.6.0] — 2026-08-16
 
 ### Added
 - **Cutting data presets** (server ≥ 0.13.0; loobric-server
