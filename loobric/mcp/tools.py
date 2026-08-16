@@ -324,6 +324,70 @@ TOOLS: List[ToolSpec] = [
         lambda c, a: c.create_instance_from_catalog(a["catalog_id"],
                                                     name=a.get("name"))),
     ToolSpec(
+        "contribute_preset",
+        "Contribute one cutting data preset — an F&S RECOMMENDATION WITH A "
+        "SOURCE, never a fact about the tool. The record's canonical "
+        "`presets` is a derived union — the server never merges sources or "
+        "picks a winner, and identical values from two origins are "
+        "corroboration. Engineering values only "
+        "(vc surface speed, fz chipload, ratio) as {value[, unit]} — raw "
+        "feed/RPM are NEVER stored, convert first. Floor: material + at "
+        "least one engineering value. `origin` is the RECOMMENDER "
+        "('manufacturer' when transcribing a chart, the agent name for "
+        "AI-derived values — never launder your own numbers as the "
+        "manufacturer's); the server stamps you as transcriber. Identity is "
+        "(origin, label): re-contributing the same pair replaces YOUR "
+        "predecessor (that is the only revision path — there is no preset "
+        "delete tool). op_type is a ratified enum (profiling, slotting, "
+        "pocketing, adaptive, facing, drilling, boring, threading, "
+        "engraving, chamfering) — omit rather than guess; put the source's "
+        "verbatim op wording and anything else it states (coolant, DOC/WOC) "
+        "in `extras`.",
+        _schema({"resource": {"type": "string",
+                              "enum": ["tool-catalog-records",
+                                       "tool-instance-records"],
+                              "description": "Catalog record for type-level "
+                                             "recommendations (manufacturer "
+                                             "charts); instance record for "
+                                             "this physical tool."},
+                 "record_id": {"type": "string"},
+                 "origin": {"type": "string"},
+                 "label": {"type": "string"},
+                 "material": {"type": "object",
+                              "description": "{name[, uuid]} VERBATIM as the "
+                                             "source states it."},
+                 "op_type": {"type": "string"},
+                 "vc": {"type": "object"},
+                 "fz": {"type": "object"},
+                 "ratio": {"type": "object"},
+                 "extras": {"type": "object"},
+                 "machine_id": {"type": "string"}},
+                ["resource", "record_id", "origin", "label", "material"]),
+        lambda c, a: c.contribute_preset(
+            a["resource"], a["record_id"], a["origin"], a["label"],
+            a["material"], op_type=a.get("op_type"), vc=a.get("vc"),
+            fz=a.get("fz"), ratio=a.get("ratio"), extras=a.get("extras"),
+            machine_id=a.get("machine_id"), actor=agent_actor())),
+    ToolSpec(
+        "list_presets",
+        "A record's cutting data preset listing, source-preserved. An "
+        "instance's listing includes its linked catalog type's entries, "
+        "each marked scope: instance|catalog. Optional filters: origin, "
+        "material (case-insensitive verbatim name), op_type, machine_id.",
+        _schema({"resource": {"type": "string",
+                              "enum": ["tool-catalog-records",
+                                       "tool-instance-records"]},
+                 "record_id": {"type": "string"},
+                 "origin": {"type": "string"},
+                 "material": {"type": "string"},
+                 "op_type": {"type": "string"},
+                 "machine_id": {"type": "string"}},
+                ["resource", "record_id"]),
+        lambda c, a: c.list_presets(
+            a["resource"], a["record_id"], origin=a.get("origin"),
+            material=a.get("material"), op_type=a.get("op_type"),
+            machine_id=a.get("machine_id"))),
+    ToolSpec(
         "create_tool_set",
         "Create a ToolSet, optionally named.",
         _schema({"name": {"type": "string"}}, []),

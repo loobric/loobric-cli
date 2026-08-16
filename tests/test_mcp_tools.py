@@ -61,9 +61,15 @@ def test_no_gated_or_destructive_tools():
     forbidden = ("delete", "confirm", "reject", "bind", "unbind", "observe",
                  "register", "login", "logout", "key", "user_create", "wipe",
                  "reset", "seed")
+    # Token-boundary matching (underscores are separators): the ratified
+    # "preset" (PRESETS.md) is not a "reset" tool, but a hypothetical
+    # "delete_preset" still trips.
+    import re
     for tool in mcp_tools.TOOLS:
+        name = tool.name.replace("_", " ")
         for word in forbidden:
-            assert word not in tool.name, (tool.name, word)
+            pattern = r"\b%s\b" % re.escape(word.replace("_", " "))
+            assert not re.search(pattern, name), (tool.name, word)
 
 
 def test_vocabulary_denylist():
@@ -71,10 +77,14 @@ def test_vocabulary_denylist():
     client-side-only words must not reach the agent-facing surface."""
     denied = ("adopt", "coverage", "reconcile", "needs attention", "mirror",
               "slot", "mint", "library")
+    # Word-boundary matching: the ratified op_type "slotting" (PRESETS.md)
+    # is not the rejected tool-table "slot".
+    import re
     for tool in mcp_tools.TOOLS:
         surface = (tool.name + " " + tool.description).lower()
         for word in denied:
-            assert word not in surface, (tool.name, word)
+            assert not re.search(r"\b%s\b" % re.escape(word), surface), \
+                (tool.name, word)
 
 
 # -- the agent actor ---------------------------------------------------------
@@ -112,6 +122,33 @@ def test_query_audit_logs_dispatch():
 
 
 # -- writes carry the agent actor -------------------------------------------
+
+def test_contribute_preset_stamps_agent_actor(monkeypatch):
+    monkeypatch.setenv("LOOBRIC_MCP_AGENT", "claude")
+    client = FakeClient()
+    mcp_tools.call_tool(client, "contribute_preset", {
+        "resource": "tool-catalog-records", "record_id": "r1",
+        "origin": "manufacturer", "label": "6061 profiling",
+        "material": {"name": "6061-T6"},
+        "vc": {"value": 250, "unit": "m/min"}})
+    name, args, kwargs = client.calls[0]
+    assert name == "contribute_preset"
+    assert args[:2] == ("tool-catalog-records", "r1")
+    assert kwargs.get("actor") == "claude@mcp"
+
+
+def test_contribute_preset_description_teaches_the_doctrine():
+    """The description is the agent's only manual: it must teach that a
+    preset is a recommendation with a source, that raw feed/RPM are never
+    stored, the origin-vs-transcriber split (no laundering AI numbers as the
+    manufacturer's), and that replace-own is the only revision path."""
+    tool = next(t for t in mcp_tools.TOOLS if t.name == "contribute_preset")
+    surface = tool.description
+    assert "RECOMMENDATION WITH A SOURCE" in surface
+    assert "NEVER stored" in surface
+    assert "launder" in surface
+    assert "replaces" in surface
+
 
 def test_create_catalog_record_stamps_agent_actor(monkeypatch):
     monkeypatch.setenv("LOOBRIC_MCP_AGENT", "claude")

@@ -3,6 +3,20 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Cutting data presets** (server ≥ 0.13.0; loobric-server
+  `docs/PRESETS.md`, grilled 2026-08-16): `Client.contribute_preset()` /
+  `Client.list_presets()` for the audited contribution door — an F&S
+  recommendation with a source, engineering values only, replace-own on
+  `(origin, label)`. Two new MCP tools, **`contribute_preset`** and
+  **`list_presets`** (23 tools total): the contribute description teaches
+  the doctrine — origin is the recommender, the agent is stamped as
+  transcriber, raw feed/RPM are never stored, and replace-own is the
+  agent's only revision path (removal stays a human act; there is
+  deliberately no preset delete tool).
+
 ## [1.5.0] — 2026-08-01
 
 ### Added

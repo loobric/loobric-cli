@@ -225,6 +225,40 @@ class Client:
             body["unit"] = unit
         return self._call("POST", f"/{resource}/{record_id}/assert", body=body)
 
+    def contribute_preset(self, resource: str, record_id: str,
+                          origin: str, label: str, material: Dict[str, Any],
+                          op_type: Optional[str] = None,
+                          vc: Optional[Dict[str, Any]] = None,
+                          fz: Optional[Dict[str, Any]] = None,
+                          ratio: Optional[Dict[str, Any]] = None,
+                          extras: Optional[Dict[str, Any]] = None,
+                          machine_id: Optional[str] = None,
+                          actor: str = "human@cli") -> Dict[str, Any]:
+        """Contribute one cutting data preset (docs/PRESETS.md) through the
+        audited contribution door. Replace-own on (origin, label); the
+        record's canonical `presets` union rematerializes server-side.
+        `resource` is tool-catalog-records or tool-instance-records."""
+        body: Dict[str, Any] = {"origin": origin, "label": label,
+                                "material": material, "actor": actor}
+        for key, value in (("op_type", op_type), ("vc", vc), ("fz", fz),
+                           ("ratio", ratio), ("extras", extras),
+                           ("machine_id", machine_id)):
+            if value is not None:
+                body[key] = value
+        return self._call("POST", f"/{resource}/{record_id}/presets",
+                          body=body)
+
+    def list_presets(self, resource: str, record_id: str,
+                     **filters: Any) -> List[Dict[str, Any]]:
+        """A record's preset listing (an instance's includes its linked
+        catalog's entries, scope-marked). Filters: origin, material,
+        op_type, machine_id."""
+        from urllib.parse import urlencode
+        params = {k: v for k, v in filters.items() if v is not None}
+        qs = ("?" + urlencode(params)) if params else ""
+        return self._call("GET", f"/{resource}/{record_id}/presets{qs}"
+                          ).get("presets", [])
+
     # -- inbox ---------------------------------------------------------------
     def list_inbox(self) -> List[Dict[str, Any]]:
         return self._call("GET", "/instance-inbox").get("items", [])
