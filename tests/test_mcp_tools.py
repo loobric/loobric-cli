@@ -343,3 +343,22 @@ def test_assert_field_allows_field_with_no_current_value():
         "resource": "tool-instance-records", "record_id": "rec1",
         "path": "name", "value": "fresh"})
     assert [c for c in client.calls if c[0] == "assert_field"]
+
+
+def test_assert_field_recovers_stringified_numbers():
+    """The MCP transport can stringify numeric values ('19.05' instead of
+    19.05 — field finding 2026-08-16, a string landed in canonical geometry).
+    The handler JSON-parses recoverable strings, same as the CLI's assert
+    command; genuine text stays text."""
+    client = FakeClient()
+    mcp_tools.call_tool(client, "assert_field", {
+        "resource": "tool-instance-records", "record_id": "r1",
+        "path": "geometry.shank_diameter", "value": "19.05", "unit": "mm"})
+    name, args, kwargs = client.calls[-1]
+    assert name == "assert_field"
+    assert args[3] == 19.05 and isinstance(args[3], float)
+    client.calls.clear()
+    mcp_tools.call_tool(client, "assert_field", {
+        "resource": "tool-instance-records", "record_id": "r1",
+        "path": "name", "value": "6mm endmill"})
+    assert client.calls[-1][1][3] == "6mm endmill"

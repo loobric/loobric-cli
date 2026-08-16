@@ -147,7 +147,8 @@ def make_request(
     session_cookie: Optional[str] = None,
     raw_body: Optional[bytes] = None,
     content_type: Optional[str] = None,
-) -> Dict[str, Any]:
+    binary: bool = False,
+) -> Any:
     """Make an HTTP request to the Loobric API and return parsed JSON.
 
     The transport for both the CLI and the `Client` library. It NEVER prints or
@@ -202,7 +203,12 @@ def make_request(
         conn.request(method, path, body=send_body, headers=headers)
         response = conn.getresponse()
         status = response.status
-        content = response.read().decode("utf-8")
+        # `binary` endpoints (PDF sheets, the export zip) return raw bytes on
+        # success; errors are still JSON and fall through to detail parsing.
+        data = response.read()
+        if binary and 200 <= status < 300:
+            return data
+        content = data.decode("utf-8")
 
         # Capture the session cookie from a login response (CLI session auth).
         set_cookie = response.getheader("set-cookie") or response.getheader("Set-Cookie")

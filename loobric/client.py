@@ -259,6 +259,87 @@ class Client:
         return self._call("GET", f"/{resource}/{record_id}/presets{qs}"
                           ).get("presets", [])
 
+    def delete_preset(self, resource: str, record_id: str,
+                      entry_id: str) -> Dict[str, Any]:
+        """Remove one preset contribution (the delete door — a human act;
+        agent keys don't hold it, replace-own is their revision path)."""
+        return self._call("DELETE",
+                          f"/{resource}/{record_id}/presets/{entry_id}")
+
+    # -- labels: late-bound physical identity (docs/LABELS.md) --------------
+
+    def create_labels(self, count: int = 1,
+                      entity_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Mint labels — blank by default, or ONE directly on a record."""
+        body: Dict[str, Any] = {"count": count}
+        if entity_id is not None:
+            body = {"count": 1, "entity_id": entity_id}
+        return self._call("POST", "/labels", body=body).get("items", [])
+
+    def list_labels(self, blank: Optional[bool] = None) -> List[Dict[str, Any]]:
+        qs = "" if blank is None else "?blank=%s" % str(bool(blank)).lower()
+        return self._call("GET", f"/labels{qs}").get("items", [])
+
+    def delete_label(self, label_id: str) -> Dict[str, Any]:
+        """Delete a BLANK label; its printed code stops resolving forever."""
+        return self._call("DELETE", f"/labels/{label_id}")
+
+    def print_label_sheet(self, count: Optional[int] = None,
+                          label_ids: Optional[List[str]] = None,
+                          stock: str = "avery-5160",
+                          start_at: int = 0) -> bytes:
+        """A PDF of QR labels on sticker stock (bytes). `count` mints that
+        many blanks and prints them; `label_ids` reprints existing ones —
+        exactly one of the two."""
+        body: Dict[str, Any] = {"stock": stock, "start_at": start_at}
+        if count is not None:
+            body["count"] = count
+        if label_ids is not None:
+            body["label_ids"] = list(label_ids)
+        return self._send("POST", "/labels/sheet", body=body, binary=True)
+
+    def label_instance(self, record_id: str, code: str) -> Dict[str, Any]:
+        """Put one of the caller's BLANK labels on this record (bind door —
+        it adjudicates what a physical artifact IS)."""
+        return self._call("POST", f"/tool-instance-records/{record_id}/label",
+                          body={"code": code})
+
+    def unlabel_instance(self, record_id: str, code: str) -> Dict[str, Any]:
+        """Take a label off this record; it reverts to blank (reusable)."""
+        return self._call("POST",
+                          f"/tool-instance-records/{record_id}/unlabel",
+                          body={"code": code})
+
+    def print_spec_sheet(self, record_ids: List[str],
+                         template: str = "qr-specs",
+                         stock: str = "avery-5160", start_at: int = 0,
+                         fmt: str = "pdf",
+                         labels: Optional[Dict[str, str]] = None) -> Any:
+        """Spec labels (docs/SPEC_LABELS.md): a printable RENDERING of the
+        records — PDF bytes for fmt='pdf'/'csv', parsed rows for 'json'.
+        Printing never mints; unlabeled records under a QR template are a
+        400 naming the ids."""
+        body: Dict[str, Any] = {"record_ids": list(record_ids),
+                                "template": template, "stock": stock,
+                                "start_at": start_at, "format": fmt}
+        if labels:
+            body["labels"] = labels
+        binary = fmt != "json"
+        return self._send("POST", "/spec-labels/sheet", body=body,
+                          binary=binary)
+
+    # -- account ------------------------------------------------------------
+
+    def export_account(self) -> bytes:
+        """The owner-operated backup zip (every collection + labels + media
+        + manifest). Read-shaped; changes nothing."""
+        return self._send("GET", "/account/export", binary=True)
+
+    def seed_demo(self) -> Dict[str, Any]:
+        """Populate a FRESH account with the demo data set (refuses on an
+        account that already has tool data)."""
+        return self._call("POST", "/account/seed-demo")
+
     # -- inbox ---------------------------------------------------------------
     def list_inbox(self) -> List[Dict[str, Any]]:
         return self._call("GET", "/instance-inbox").get("items", [])

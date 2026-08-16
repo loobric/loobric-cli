@@ -16,7 +16,17 @@ GLOSSARY_MD = """\
   status plus per-client sections. Two identical end mills are two instances.
 - **ToolCatalogRecord** — a catalog-level *type*: manufacturer, product code,
   *nominal* geometry. A ToolInstanceRecord may reference one. "Catalog record"
-  is the row; "catalog" alone means a collection of them.
+  is the row; a **Catalog** is a NAMED COLLECTION of them (first-class,
+  server >= 0.14.0): `canonical.name` + `canonical.members`. Membership is
+  organization, never identity — a record may sit in many catalogs,
+  uncataloged records are normal, deleting a catalog deletes no records.
+- **Cutting data preset** ("preset") — an F&S RECOMMENDATION WITH A SOURCE,
+  never a fact about the tool (server >= 0.13.0). Canonical `presets` is a
+  derived union the server never merges: identical values from two origins
+  are corroboration, kept as two entries. Entry identity is (origin, label);
+  `origin` is the RECOMMENDER (manufacturer, a client, an agent), the
+  provenance actor is the transcriber. Engineering values only (vc surface
+  speed, fz chipload, ratio) — raw feed/RPM are never stored.
 - **ToolTableEntry** — one machine's tool-table row: `tool_number` (the only
   identifier that travels in G-code — the CAM-to-CNC contract), offsets, and
   optionally a bound instance.
@@ -87,6 +97,22 @@ availability, alternate part numbers — goes in the free-form `client_data`
 dict. Nothing the manufacturer states gets discarded or crammed into the
 name string; and a field the source does NOT state stays absent — an honest
 blank beats a confident guess.
+
+## Catalogs organize; they never define
+After creating or importing catalog records, FILE them: list_catalogs, then
+set_catalog_members (a REPLACE — read current members, send the full new
+list). Name import-born catalogs for the manufacturer. A record in several
+catalogs is fine; an uncataloged record is fine too — never invent a
+catalog just to avoid an honest "uncataloged".
+
+## Presets: origin is the recommender, you are the transcriber
+Contributing F&S data (contribute_preset): if you transcribed a
+manufacturer's published chart, origin is "manufacturer"; if the numbers
+are yours (AI-derived starting values), origin is YOUR agent name — never
+launder your own numbers as the manufacturer's. Convert raw feed/RPM to
+Vc/Fz before contributing; they are never stored. Re-contributing the same
+(origin, label) replaces YOUR entry — that is your only revision path;
+removal is a human act.
 
 ## What agents cannot do (by design, permanently)
 - delete anything, or reset/re-seed an account

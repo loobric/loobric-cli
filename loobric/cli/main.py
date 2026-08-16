@@ -14,6 +14,7 @@ import getpass
 import json
 import os
 import sys
+import time
 from typing import Any, Dict, List, Optional
 
 from loobric import transport
@@ -1488,6 +1489,161 @@ def _run(fn, *args, **kwargs):
         sys.exit(1)
 
 
+# --- catalogs: named collections of catalog records (server >= 0.14.0) -------
+
+def list_catalogs():
+    items = _client().list_catalogs()
+    if not items:
+        print("No catalogs. (Records may still exist — uncataloged is normal.)")
+        return
+    for c in items:
+        name = ((c["canonical"].get("name") or {}).get("value")) or "(unnamed)"
+        n = len(((c["canonical"].get("members") or {}).get("value")) or [])
+        print(f"  {c['internal']['id']}  {name}  ({n} record(s))")
+
+
+def show_catalog(catalog_id):
+    c = _client().get_catalog(catalog_id)
+    name = ((c["canonical"].get("name") or {}).get("value")) or "(unnamed)"
+    members = ((c["canonical"].get("members") or {}).get("value")) or []
+    print(f"  Catalog: {name}  [{c['internal']['id']}]")
+    print(f"  Members: {len(members)}")
+    for rid in members:
+        print(f"    {rid}")
+
+
+def create_catalog(name):
+    c = _client().create_catalog(name)
+    print(f"Created catalog '{name}' ({c['internal']['id'][:8]}).")
+
+
+def rename_catalog(catalog_id, name):
+    _client().rename_catalog(catalog_id, name)
+    print(f"Renamed to '{name}'.")
+
+
+def catalog_members(catalog_id, record_ids):
+    c = _client().set_catalog_members(catalog_id, record_ids)
+    n = len(((c["canonical"].get("members") or {}).get("value")) or [])
+    print(f"Membership replaced: {n} record(s). (Records themselves untouched.)")
+
+
+def delete_catalog(catalog_id, yes):
+    if not yes:
+        print("Deleting a catalog keeps its records (organization, not "
+              "identity). Re-run with --yes to confirm.")
+        sys.exit(1)
+    _client().delete_catalog(catalog_id)
+    print("Catalog deleted; its records stay.")
+
+
+# --- cutting data presets (server >= 0.13.0) ---------------------------------
+
+def _preset_resource(catalog_record):
+    return "tool-catalog-records" if catalog_record else "tool-instance-records"
+
+
+def contribute_preset_cmd(args):
+    material = {"name": args.material}
+    if args.material_uuid:
+        material["uuid"] = args.material_uuid
+    kw = {}
+    if args.vc is not None:
+        kw["vc"] = {"value": args.vc, **({"unit": args.vc_unit} if args.vc_unit else {})}
+    if args.fz is not None:
+        kw["fz"] = {"value": args.fz, **({"unit": args.fz_unit} if args.fz_unit else {})}
+    if args.ratio is not None:
+        kw["ratio"] = {"value": args.ratio}
+    rec = _client().contribute_preset(
+        _preset_resource(args.catalog_record), args.record_id,
+        args.origin, args.label, material,
+        op_type=args.op_type, machine_id=args.machine, **kw)
+    n = len(((rec["canonical"].get("presets") or {}).get("value")) or [])
+    print(f"Preset '{args.label}' contributed (origin {args.origin}); "
+          f"the record now carries {n} entr{'y' if n == 1 else 'ies'}.")
+
+
+def list_presets_cmd(args):
+    entries = _client().list_presets(
+        _preset_resource(args.catalog_record), args.record_id,
+        origin=args.origin, material=args.material, op_type=args.op_type)
+    if not entries:
+        print("No cutting data presets.")
+        return
+    for e in entries:
+        vals = " ".join("%s=%s%s" % (k, e[k]["value"], e[k].get("unit", ""))
+                        for k in ("vc", "fz", "ratio") if e.get(k))
+        scope = " [from catalog]" if e.get("scope") == "catalog" else ""
+        print(f"  {e.get('id', '')}  {e['origin']}: {e['label']}  "
+              f"({(e.get('material') or {}).get('name', '?')}"
+              f"{', ' + e['op_type'] if e.get('op_type') else ''})  "
+              f"{vals}{scope}")
+
+
+def delete_preset_cmd(args):
+    _client().delete_preset(_preset_resource(args.catalog_record),
+                            args.record_id, args.entry_id)
+    print("Preset entry removed.")
+
+
+# --- labels & spec labels ----------------------------------------------------
+
+def create_labels_cmd(count, tool):
+    client = _client()
+    if tool:
+        items = client.create_labels(entity_id=tool)
+        print(f"Label {items[0]['code']} created on record {tool[:8]}.")
+    else:
+        items = client.create_labels(count=count)
+        print(f"{len(items)} blank label(s) minted:")
+        for label in items:
+            print(f"  {label['code']}")
+
+
+def list_labels_cmd(blank):
+    items = _client().list_labels(blank=blank)
+    if not items:
+        print("No labels.")
+        return
+    for label in items:
+        where = label.get("entity_id") or "(blank)"
+        print(f"  {label['id']}  {label['code']}  -> {where}")
+
+
+def _write_pdf(data, out):
+    with open(out, "wb") as f:
+        f.write(data)
+    print(f"Wrote {out} ({len(data)} bytes). Print at 100% scale.")
+
+
+def print_labels_cmd(args):
+    data = _client().print_label_sheet(
+        count=args.count, label_ids=args.ids or None,
+        stock=args.stock, start_at=args.start_at)
+    _write_pdf(data, args.out)
+
+
+def print_spec_labels_cmd(args):
+    result = _client().print_spec_sheet(
+        args.record_ids, template=args.template, stock=args.stock,
+        start_at=args.start_at, fmt=args.format)
+    if args.format == "json":
+        print(json.dumps(result, indent=2))
+    elif args.format == "csv" and not args.out:
+        sys.stdout.write(result.decode("utf-8"))
+    else:
+        _write_pdf(result, args.out or "spec-labels.pdf")
+
+
+def export_account_cmd(out):
+    data = _client().export_account()
+    out = out or time.strftime("loobric-export-%Y%m%d-%H%M%S.zip")
+    with open(out, "wb") as f:
+        f.write(data)
+    print(f"Wrote {out} ({len(data)} bytes) — every record with provenance, "
+          f"labels, media, manifest.")
+
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -2081,6 +2237,143 @@ Environment Variables:
         help="Do not store the raw source payload in the record's client section")
     import_parser.set_defaults(func=lambda args: import_tools(
         args.file, source=args.source, dry_run=args.dry_run, no_preserve=args.no_preserve))
+
+    # === catalogs (named collections of catalog records) ===
+    lc_parser = subparsers.add_parser(
+        "list-catalogs", help="List catalogs (named collections of catalog records)")
+    lc_parser.set_defaults(func=lambda _: list_catalogs())
+
+    sc_parser = subparsers.add_parser("show-catalog", help="Show one catalog and its members")
+    sc_parser.add_argument("catalog_id")
+    sc_parser.set_defaults(func=lambda args: show_catalog(args.catalog_id))
+
+    cc_parser = subparsers.add_parser(
+        "create-catalog", help="Create a named, empty catalog")
+    cc_parser.add_argument("name")
+    cc_parser.set_defaults(func=lambda args: create_catalog(args.name))
+
+    rc_parser = subparsers.add_parser("rename-catalog", help="Rename a catalog")
+    rc_parser.add_argument("catalog_id")
+    rc_parser.add_argument("name")
+    rc_parser.set_defaults(func=lambda args: rename_catalog(args.catalog_id, args.name))
+
+    cm_parser = subparsers.add_parser(
+        "catalog-members",
+        help="REPLACE a catalog's membership with the given catalog-record ids")
+    cm_parser.add_argument("catalog_id")
+    cm_parser.add_argument("record_ids", nargs="+")
+    cm_parser.set_defaults(func=lambda args: catalog_members(args.catalog_id, args.record_ids))
+
+    dc_parser = subparsers.add_parser(
+        "delete-catalog", help="Delete a catalog (its records STAY)")
+    dc_parser.add_argument("catalog_id")
+    dc_parser.add_argument("--yes", action="store_true")
+    dc_parser.set_defaults(func=lambda args: delete_catalog(args.catalog_id, args.yes))
+
+    # === cutting data presets ===
+    cp_parser = subparsers.add_parser(
+        "contribute-preset",
+        help="Contribute a cutting data preset (a recommendation with a source)")
+    cp_parser.add_argument("record_id", help="Tool instance record id (or catalog record with --catalog-record)")
+    cp_parser.add_argument("--catalog-record", action="store_true",
+                           help="Target a catalog record (type-level, e.g. a manufacturer chart)")
+    cp_parser.add_argument("--origin", required=True,
+                           help="The RECOMMENDER: manufacturer, user, a client name")
+    cp_parser.add_argument("--label", required=True, help="Per-origin name, e.g. '6061 profiling'")
+    cp_parser.add_argument("--material", required=True, help="Material name, verbatim from the source")
+    cp_parser.add_argument("--material-uuid")
+    cp_parser.add_argument("--op-type", help="Ratified op type (the server 400 names valid values)")
+    cp_parser.add_argument("--vc", type=float, help="Surface speed (engineering value)")
+    cp_parser.add_argument("--vc-unit", help="e.g. m/min, sfm")
+    cp_parser.add_argument("--fz", type=float, help="Chipload per tooth")
+    cp_parser.add_argument("--fz-unit", help="e.g. mm, in")
+    cp_parser.add_argument("--ratio", type=float, help="Vertical-feed ratio")
+    cp_parser.add_argument("--machine", help="Optional machine qualifier (machine record id)")
+    cp_parser.set_defaults(func=lambda args: contribute_preset_cmd(args))
+
+    lp_parser = subparsers.add_parser(
+        "list-presets", help="List a record's cutting data presets (union, source-preserved)")
+    lp_parser.add_argument("record_id")
+    lp_parser.add_argument("--catalog-record", action="store_true")
+    lp_parser.add_argument("--origin")
+    lp_parser.add_argument("--material")
+    lp_parser.add_argument("--op-type", dest="op_type")
+    lp_parser.set_defaults(func=lambda args: list_presets_cmd(args))
+
+    dp_parser = subparsers.add_parser(
+        "delete-preset", help="Remove one preset contribution (a human act)")
+    dp_parser.add_argument("record_id")
+    dp_parser.add_argument("entry_id")
+    dp_parser.add_argument("--catalog-record", action="store_true")
+    dp_parser.set_defaults(func=lambda args: delete_preset_cmd(args))
+
+    # === labels ===
+    cl_parser = subparsers.add_parser(
+        "create-labels", help="Mint labels — blank by default, or one on a record")
+    cl_parser.add_argument("--count", type=int, default=1)
+    cl_parser.add_argument("--tool", help="Put ONE new label directly on this record id")
+    cl_parser.set_defaults(func=lambda args: create_labels_cmd(args.count, args.tool))
+
+    ll_parser = subparsers.add_parser("list-labels", help="List labels")
+    ll_group = ll_parser.add_mutually_exclusive_group()
+    ll_group.add_argument("--blank", action="store_true", help="Only blank labels")
+    ll_group.add_argument("--used", action="store_true", help="Only labels on records")
+    ll_parser.set_defaults(func=lambda args: list_labels_cmd(
+        True if args.blank else (False if args.used else None)))
+
+    dl_parser = subparsers.add_parser(
+        "delete-label", help="Delete a BLANK label (its code stops resolving forever)")
+    dl_parser.add_argument("label_id")
+    dl_parser.set_defaults(func=lambda args: _client().delete_label(args.label_id)
+                           and print("Label deleted."))
+
+    pl_parser = subparsers.add_parser(
+        "print-labels", help="Render a QR label sheet PDF (mint blanks, or reprint by id)")
+    pl_group = pl_parser.add_mutually_exclusive_group(required=True)
+    pl_group.add_argument("--count", type=int, help="Mint and print this many blanks")
+    pl_group.add_argument("--ids", nargs="+", help="Reprint these existing label ids")
+    pl_parser.add_argument("--stock", default="avery-5160")
+    pl_parser.add_argument("--start-at", type=int, default=0,
+                           help="0-based grid position on a partially used sheet")
+    pl_parser.add_argument("--out", default="labels.pdf")
+    pl_parser.set_defaults(func=lambda args: print_labels_cmd(args))
+
+    lt_parser = subparsers.add_parser(
+        "label-tool", help="Stick a blank label's code onto a tool record")
+    lt_parser.add_argument("record_id")
+    lt_parser.add_argument("code")
+    lt_parser.set_defaults(func=lambda args: _client().label_instance(
+        args.record_id, args.code) and print("Labeled."))
+
+    ut_parser = subparsers.add_parser(
+        "unlabel-tool", help="Take a label off a record (it reverts to blank)")
+    ut_parser.add_argument("record_id")
+    ut_parser.add_argument("code")
+    ut_parser.set_defaults(func=lambda args: _client().unlabel_instance(
+        args.record_id, args.code) and print("Unlabeled; the label is blank again."))
+
+    psl_parser = subparsers.add_parser(
+        "print-spec-labels",
+        help="Render spec labels (specs in ink) for tool records — PDF/CSV/JSON")
+    psl_parser.add_argument("record_ids", nargs="+")
+    psl_parser.add_argument("--template", default="qr-specs",
+                            choices=["qr-specs", "spec-plaque"])
+    psl_parser.add_argument("--stock", default="avery-5160")
+    psl_parser.add_argument("--start-at", type=int, default=0)
+    psl_parser.add_argument("--format", default="pdf", choices=["pdf", "csv", "json"])
+    psl_parser.add_argument("--out", help="Output file (default spec-labels.pdf; csv/json go to stdout)")
+    psl_parser.set_defaults(func=lambda args: print_spec_labels_cmd(args))
+
+    # === account export / seed ===
+    export_parser = subparsers.add_parser(
+        "export", help="Download your account's backup zip (records, labels, media, manifest)")
+    export_parser.add_argument("--out", help="Output file (default loobric-export-<ts>.zip)")
+    export_parser.set_defaults(func=lambda args: export_account_cmd(args.out))
+
+    seed_parser = subparsers.add_parser(
+        "seed-demo", help="Populate a FRESH account with the demo data set")
+    seed_parser.set_defaults(func=lambda _: print(json.dumps(
+        _client().seed_demo(), indent=2)))
 
     # === ping ===
     ping_parser = subparsers.add_parser(

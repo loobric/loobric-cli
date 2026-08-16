@@ -5,6 +5,45 @@ are recorded here. This project adheres to [Semantic Versioning](https://semver.
 
 ## [Unreleased]
 
+### Added
+- **Completeness pass** (audit 2026-08-16 — the library and CLI had
+  fallen a feature generation behind the server):
+  - `Client.delete_preset()` — restoring reference-client-first parity
+    with the FreeCAD vendored copy, which had it first (a rule
+    inversion, now corrected).
+  - Label verbs and commands, end to end: `create_labels` / `list_labels`
+    / `delete_label` / `print_label_sheet` / `label_instance` /
+    `unlabel_instance`, and `create-labels`, `list-labels`,
+    `delete-label`, `print-labels`, `label-tool`, `unlabel-tool`.
+  - **Spec labels from the terminal**: `Client.print_spec_sheet()` and
+    `loobric print-spec-labels <ids> --template --stock --format
+    pdf|csv|json` (printing never mints; the server's
+    label-these-first 400 surfaces verbatim).
+  - **Account backup**: `Client.export_account()` + `loobric export`
+    (the owner-operated zip), and `Client.seed_demo()` + `loobric
+    seed-demo`.
+  - **Catalog commands**: `create-catalog`, `list-catalogs`,
+    `show-catalog`, `rename-catalog`, `catalog-members` (replace),
+    `delete-catalog --yes` — over the 1.7.0 entity verbs.
+  - **Preset commands**: `contribute-preset` (engineering values only,
+    origin = the recommender), `list-presets`, `delete-preset`.
+  - The transport learned binary responses (PDF sheets, the export zip).
+- **Three new MCP tools (26 total)**: `list_catalogs`, `create_catalog`,
+  `set_catalog_members` — agents can finally FILE the records they
+  research (organization, never identity; deliberately no
+  delete-catalog tool). The glossary and concepts resources are
+  refreshed with the cutting-data-preset doctrine
+  (origin-vs-transcriber) and the Catalog entity — they had gone stale
+  at the 1.2.0 vocabulary.
+
+### Fixed
+- **MCP `assert_field` recovers stringified numbers**: the transport can
+  deliver a numeric value as `"19.05"`, which landed as a string in
+  canonical geometry (field finding 2026-08-16) and breaks numeric
+  consumers (the FreeCAD overlay comparison, spec-label rendering). The
+  handler now JSON-parses recoverable strings — same rule as the CLI's
+  assert command; genuine text stays text.
+
 ### Changed
 - **Catalog verbs target the v2 Catalog entity** (server ≥ 0.14.0):
   `list_catalogs` / `get_catalog` / `create_catalog(name)` /

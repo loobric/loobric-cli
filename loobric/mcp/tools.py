@@ -155,6 +155,21 @@ def _current_source(record: Dict[str, Any], path: str):
 
 # -- handlers ----------------------------------------------------------------
 
+def _coerce_value(value):
+    """Recover the typed value when the MCP transport stringified it (field
+    finding 2026-08-16: a numeric assert arrived as \"19.05\" and landed as a
+    string in canonical, which breaks numeric consumers downstream). Same
+    rule as the CLI's assert command: JSON-parse if possible, else keep the
+    string — '6mm endmill' stays text, '19.05' becomes a number."""
+    if isinstance(value, str):
+        import json as _json
+        try:
+            return _json.loads(value)
+        except (ValueError, TypeError):
+            return value
+    return value
+
+
 def _assert_field(client, args):
     resource = args["resource"]
     getter = _ASSERTABLE_RESOURCES.get(resource)
@@ -170,7 +185,7 @@ def _assert_field(client, args):
             "assertions. Tell the user — a human can override via the CLI or "
             "Web UI if the measurement really is wrong.")
     return client.assert_field(resource, args["record_id"], args["path"],
-                               args["value"], actor=agent_actor(),
+                               _coerce_value(args["value"]), actor=agent_actor(),
                                unit=args.get("unit"))
 
 
@@ -323,6 +338,39 @@ TOOLS: List[ToolSpec] = [
                  "name": {"type": "string"}}, ["catalog_id"]),
         lambda c, a: c.create_instance_from_catalog(a["catalog_id"],
                                                     name=a.get("name"))),
+    ToolSpec(
+        "list_catalogs",
+        "List the account's Catalogs — NAMED COLLECTIONS of catalog records "
+        "(not the records themselves; use list_tool_catalog_records for "
+        "those). Each carries canonical.name and canonical.members (a list "
+        "of catalog-record ids). Membership is organization, never "
+        "identity: a record may sit in any number of catalogs, and "
+        "uncataloged records are normal, not an error.",
+        _schema({}, []),
+        lambda c, a: c.list_catalogs()),
+    ToolSpec(
+        "create_catalog",
+        "Create a named, empty Catalog (a collection of catalog records — "
+        "e.g. after researching a manufacturer's tools, make a catalog "
+        "named for the manufacturer and file the records with "
+        "set_catalog_members). Imports auto-create catalogs; manual "
+        "creation is for curation.",
+        _schema({"name": {"type": "string"}}, ["name"]),
+        lambda c, a: c.create_catalog(a["name"], actor=agent_actor())),
+    ToolSpec(
+        "set_catalog_members",
+        "REPLACE a Catalog's membership with the given catalog-record ids "
+        "(read the current members first and send the full new list — this "
+        "is not an append). Unknown ids are a 400 naming them. Records stay "
+        "untouched: membership organizes, it never changes identity, and a "
+        "record may sit in several catalogs at once. There is deliberately "
+        "no delete-catalog tool.",
+        _schema({"catalog_id": {"type": "string"},
+                 "record_ids": {"type": "array",
+                                "items": {"type": "string"}}},
+                ["catalog_id", "record_ids"]),
+        lambda c, a: c.set_catalog_members(a["catalog_id"], a["record_ids"],
+                                           actor=agent_actor())),
     ToolSpec(
         "contribute_preset",
         "Contribute one cutting data preset — an F&S RECOMMENDATION WITH A "
