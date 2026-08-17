@@ -678,7 +678,7 @@ server, and you decide what it is. It assumes you have a running server (see
 
 On the shop floor, an operator measures tool 3 and the controller's tool table
 gets a new entry. A client such as
-[loobric-linuxcnc](https://github.com/loobric/loobric-linuxcnc) syncs that entry
+[loobric-linuxcnc](https://github.com/loobric/loobric-clients/tree/master/clients/linuxcnc) syncs that entry
 up to the server. Nothing for you to type here — this is the event that starts
 the workflow.
 

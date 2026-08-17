@@ -101,7 +101,7 @@ Both clients can target the same sandbox account using the API key from step 4.
   addon, open its preferences, confirm the server URL is
   `https://api.loobric.com`, and paste your API key. Its README has a
   "Try against the sandbox" section.
-- **LinuxCNC** — the single-file [loobric-linuxcnc](https://github.com/loobric/loobric-linuxcnc)
+- **LinuxCNC** — the single-file [loobric-linuxcnc](https://github.com/loobric/loobric-clients/tree/master/clients/linuxcnc)
   client reads its server from the environment:
 
   ```bash
