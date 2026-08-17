@@ -3,6 +3,25 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] — 2026-08-17
+
+### Added
+- **Batch sync verbs** (loobric-server 0.15.0's batch sync doors,
+  docs/BATCH_SYNC.md): `Client.sync_tool_records()` /
+  `Client.sync_catalog_records()` (both over `sync_records_batch()`) —
+  items carry `data` + `asserts` + `presets`, per-item result tuples come
+  back in request order, and chunking at the server's 200-item cap is
+  transparent. A pre-0.15 server 404s; callers fall back to the
+  per-record doors.
+
+### Changed
+- **Transport keep-alive**: one pooled connection per (scheme, host) per
+  thread instead of a fresh TLS handshake per request — the dominant
+  client-side latency against api.loobric.com behind Cloudflare. A stale
+  reused socket is retried once on a fresh connection; a non-idempotent
+  method (POST) is only retried when the failure happened before the
+  request was sent, so nothing can duplicate.
+
 ## [1.7.0] — 2026-08-16
 
 ### Added
