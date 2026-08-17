@@ -991,13 +991,16 @@ def _print_draft(draft):
 
 
 def import_tools(path, source=None, dry_run=False, no_preserve=False):
-    """Import tool data from a known format into catalog records.
+    """Import tool data from a known format.
 
-    Detects the format: DIN 4000 (CSV/XML), STEP P21, or a GTC package (.zip,
-    ISO 13399 — also carries 3D models/images as canonical media). Parsing is
-    offline; --dry-run shows exactly what would be created without sending. Each
-    record's full source payload is preserved in its client section unless
-    --no-preserve is given."""
+    Manufacturer catalog formats — DIN 4000 (CSV/XML), STEP P21, a GTC package
+    (.zip, ISO 13399, with 3D models/images as canonical media) — become
+    catalog records. CAM library formats — Vectric .vtdb, SprutCam .db,
+    CAMotics JSON — describe tools the user owns and become instance records
+    through the batch sync door, cutting data riding along as presets. Parsing
+    is offline; --dry-run shows exactly what would be created without sending.
+    Each record's full source payload is preserved in its client section
+    (catalog imports honor --no-preserve)."""
     from loobric import importers
     from loobric.importers.run import import_drafts
 
@@ -1006,8 +1009,15 @@ def import_tools(path, source=None, dry_run=False, no_preserve=False):
     except FileNotFoundError:
         print(f"Error: file not found: {path}", file=sys.stderr)
         sys.exit(1)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
     if not drafts:
         print("No tool records found in the file.")
+        return
+
+    if isinstance(drafts[0], importers.LibraryToolDraft):
+        _import_library(path, drafts, dry_run=dry_run)
         return
 
     if dry_run:
@@ -1037,6 +1047,42 @@ def import_tools(path, source=None, dry_run=False, no_preserve=False):
     print(f"\nImport complete: {len(report.created)} created, "
           f"{len(report.skipped)} skipped, {len(report.failed)} failed"
           f"{f', {report.media_uploaded} media uploaded' if report.media_uploaded else ''}.")
+
+
+def _import_library(path, drafts, dry_run=False):
+    """The CAM-library half of import: instance records via the batch door."""
+    from loobric.importers.run import import_library_drafts
+
+    if dry_run:
+        print(f"Parsed {len(drafts)} tool(s) from {path} "
+              f"(dry run — nothing sent):")
+        for d in drafts:
+            print(f"  • {d.name}  [{d.client_name}:{d.client_item_id}]")
+            for a in d.asserts:
+                apath, value, unit = a
+                print(f"      {apath.split('.')[-1]}: {value}{unit or ''}")
+            if d.presets:
+                labels = ", ".join(p["label"] for p in d.presets)
+                print(f"      presets: {labels}")
+        return
+
+    marks = {"created": "+", "updated": "~", "unchanged": "="}
+
+    def on_event(kind, draft, info):
+        if kind in marks:
+            tail = " (unchanged)" if kind == "unchanged" else ""
+            print(f"  {marks[kind]} {draft.name}{tail}")
+        else:
+            print(f"  ✗ {draft.name}: {info}")
+
+    report = import_library_drafts(_client(), drafts, on_event=on_event)
+    parts = [f"{len(report.created)} created", f"{len(report.updated)} updated",
+             f"{len(report.unchanged)} unchanged", f"{len(report.failed)} failed"]
+    if report.presets_contributed or report.presets_skipped:
+        parts.append(f"{report.presets_contributed} presets contributed"
+                     + (f" ({report.presets_skipped} skipped)"
+                        if report.presets_skipped else ""))
+    print("\nImport complete: " + ", ".join(parts) + ".")
 
 
 def _print_field(label, leaf, indent="  "):
@@ -2223,9 +2269,12 @@ Environment Variables:
     # === import (format importers) ===
     import_parser = subparsers.add_parser(
         "import",
-        help="Import tool data from a known format (DIN 4000, STEP P21, GTC, "
-             "SolidCAM, hyperMILL) into catalog records")
-    import_parser.add_argument("file", help="Path to the export file (.csv/.xml/.p21/.zip)")
+        help="Import tool data from a known format: catalogs (DIN 4000, STEP "
+             "P21, GTC, SolidCAM, hyperMILL) become catalog records; CAM "
+             "libraries (Vectric .vtdb, SprutCam .db, CAMotics JSON) become "
+             "instance records")
+    import_parser.add_argument(
+        "file", help="Path to the export file (.csv/.xml/.p21/.zip/.vtdb/.db/.json)")
     import_parser.add_argument(
         "--source", default=None,
         help="Declared actor; the server stamps asserted:<source> (default: din4000-import)")

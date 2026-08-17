@@ -1,0 +1,24 @@
+{
+  "1": {
+    "units": "metric",
+    "shape": "Cylindrical",
+    "length": 50,
+    "diameter": 6.35,
+    "description": "1/4in flat endmill"
+  },
+  "2": {
+    "units": "imperial",
+    "shape": "Ballnose",
+    "length": 2,
+    "diameter": 0.25,
+    "description": ""
+  },
+  "3": {
+    "units": "metric",
+    "shape": "Conical",
+    "length": 20,
+    "diameter": 12.7,
+    "snub_diameter": 0.2,
+    "description": "90 deg V"
+  }
+}

@@ -20,9 +20,10 @@ import re
 from pathlib import Path
 from typing import List, Union
 
-from loobric.importers.base import CatalogRecordDraft, MediaFile
+from loobric.importers.base import (CatalogRecordDraft, LibraryToolDraft,
+                                    MediaFile)
 
-__all__ = ["CatalogRecordDraft", "MediaFile", "parse"]
+__all__ = ["CatalogRecordDraft", "LibraryToolDraft", "MediaFile", "parse"]
 
 # XML root element -> importer module name. Lets one `.xml` extension fan out to
 # the ToolsUnited DIN 4000, SolidCAM, and hyperMILL formats.
@@ -39,6 +40,9 @@ def parse(path: Union[str, Path]) -> List[CatalogRecordDraft]:
     - ``.zip`` (or a PK header) → GTC package (ISO 13399, with media)
     - ``.p21`` / ``.stp`` / ``.step`` / an ``ISO-10303-21`` header → STEP P21
     - XML → by root element: DIN 4000 / SolidCAM / hyperMILL
+    - SQLite → by table set: Vectric ``.vtdb`` / SprutCam ``.db``
+    - JSON → CAMotics tool table (a Fusion library JSON is rejected with a
+      pointer to loobric-fusion)
     - ``.csv`` (or anything else) → DIN 4000
     """
     name = str(path).lower()
@@ -50,12 +54,36 @@ def parse(path: Union[str, Path]) -> List[CatalogRecordDraft]:
             or head.lstrip().startswith(b"ISO-10303-21")):
         from loobric.importers import p21
         return p21.parse(path)
+    if head[:16] == b"SQLite format 3\x00":
+        return _parse_sqlite(path)
     if name.endswith(".xml") or head.lstrip()[:1] == b"<":
         module = _XML_ROOTS.get(_xml_root_tag(head), "din4000")
         mod = __import__("loobric.importers." + module, fromlist=["parse"])
         return mod.parse(path)
+    if name.endswith(".json") or head.lstrip()[:1] in (b"{", b"["):
+        from loobric.importers import camotics
+        return camotics.parse(path)
     from loobric.importers import din4000
     return din4000.parse(path)
+
+
+def _parse_sqlite(path):
+    """Tell the SQLite-based CAM libraries apart by their table sets."""
+    import sqlite3
+    con = sqlite3.connect(f"file:{Path(path)}?mode=ro", uri=True)
+    try:
+        tables = [r[0] for r in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")]
+    finally:
+        con.close()
+    from loobric.importers import sprutcam, vectric
+    if vectric.sniff(tables):
+        return vectric.parse(path)
+    if sprutcam.sniff(tables):
+        return sprutcam.parse(path)
+    raise ValueError(
+        "unrecognized SQLite tool database (expected Vectric tool_geometry "
+        "or SprutCam ISTMillToolAccessor tables)")
 
 
 def _xml_root_tag(head: bytes) -> str:
