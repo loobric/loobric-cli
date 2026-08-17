@@ -6,9 +6,12 @@ package can be vendored or run in constrained interpreters (e.g. FreeCAD)."""
 import http.client
 import json
 import sys
+import threading
 import urllib.parse
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+HTTP_TIMEOUT = 30
 
 from loobric.errors import (
     AuthRequired, ConnectionFailed, HTTPError, NotFound, LoobricClientError, _http_error,
@@ -124,16 +127,55 @@ def clear_session():
             print(f"Warning: Could not clear session file: {e}", file=sys.stderr)
 
 
-def get_connection(base_url: Optional[str] = None):
-    """Create an HTTP/HTTPS connection for the given base URL (or the global)."""
-    base = base_url or BASE_URL
+# Per-thread keep-alive pool, one connection per (scheme, netloc). Reusing
+# the TLS session matters: against api.loobric.com (behind Cloudflare) a
+# fresh handshake per request dominates latency, and batch clients (the
+# Fusion importer syncing hundreds of tools) make thousands of requests.
+# Thread-local so concurrent workers never share a socket.
+_pool = threading.local()
+
+
+def _pool_key(base: str):
     parsed = urllib.parse.urlparse(base)
-    if parsed.scheme == "https":
-        return http.client.HTTPSConnection(parsed.netloc)
-    elif parsed.scheme == "http":
-        return http.client.HTTPConnection(parsed.netloc)
-    else:
+    if parsed.scheme not in ("http", "https"):
         raise LoobricClientError(f"Unsupported scheme in base URL: {parsed.scheme!r}")
+    return (parsed.scheme, parsed.netloc)
+
+
+def _drop_connection(base_url: Optional[str] = None):
+    """Forget (and close) this thread's cached connection for the base URL."""
+    try:
+        key = _pool_key(base_url or BASE_URL)
+    except LoobricClientError:
+        return
+    conn = getattr(_pool, "conns", {}).pop(key, None)
+    if conn is not None:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def get_connection(base_url: Optional[str] = None):
+    """This thread's keep-alive connection for the base URL (or the global),
+    created on first use. `conn._loobric_reused` says whether it carried a
+    previous request — a reused socket may have gone stale, so make_request
+    retries once on a fresh one."""
+    base = base_url or BASE_URL
+    scheme, netloc = _pool_key(base)
+    conns = getattr(_pool, "conns", None)
+    if conns is None:
+        conns = _pool.conns = {}
+    conn = conns.get((scheme, netloc))
+    if conn is not None:
+        conn._loobric_reused = True
+        return conn
+    cls = http.client.HTTPSConnection if scheme == "https" \
+        else http.client.HTTPConnection
+    conn = cls(netloc, timeout=HTTP_TIMEOUT)
+    conn._loobric_reused = False
+    conns[(scheme, netloc)] = conn
+    return conn
 
 
 def make_request(
@@ -199,34 +241,50 @@ def make_request(
     else:
         send_body = json.dumps(body) if body is not None else None
 
-    try:
-        conn.request(method, path, body=send_body, headers=headers)
-        response = conn.getresponse()
-        status = response.status
-        # `binary` endpoints (PDF sheets, the export zip) return raw bytes on
-        # success; errors are still JSON and fall through to detail parsing.
-        data = response.read()
-        if binary and 200 <= status < 300:
-            return data
-        content = data.decode("utf-8")
-
-        # Capture the session cookie from a login response (CLI session auth).
-        set_cookie = response.getheader("set-cookie") or response.getheader("Set-Cookie")
-        if set_cookie:
-            for part in set_cookie.split(";"):
-                part = part.strip()
-                if part.startswith("session="):
-                    SESSION_COOKIE = part.split("=", 1)[1]
-                    break
-
-        if 200 <= status < 300:
-            return json.loads(content) if content.strip() else {}
+    # Two attempts: a REUSED keep-alive socket may have been closed by the
+    # peer between requests, which surfaces as a connection error on the
+    # next use — retried once on a fresh connection. A non-idempotent
+    # method (POST) is only retried when the failure happened BEFORE the
+    # request went out (nothing was delivered, so nothing can duplicate).
+    for attempt in (1, 2):
+        sent = False
         try:
-            detail = json.loads(content).get("detail", content)
-        except json.JSONDecodeError:
-            detail = content
-        raise _http_error(status, detail)
-    except (http.client.HTTPException, ConnectionError, OSError) as e:
-        raise ConnectionFailed(f"{e} (server at {base_url or BASE_URL})")
-    finally:
-        conn.close()
+            conn.request(method, path, body=send_body, headers=headers)
+            sent = True
+            response = conn.getresponse()
+            status = response.status
+            # `binary` endpoints (PDF sheets, the export zip) return raw bytes
+            # on success; errors are still JSON and fall through to detail
+            # parsing. Either way the body is fully drained, which is what
+            # keeps the connection reusable for the next request.
+            data = response.read()
+        except (http.client.HTTPException, ConnectionError, OSError) as e:
+            _drop_connection(base_url)
+            reused = getattr(conn, "_loobric_reused", False)
+            idempotent = method.upper() in ("GET", "HEAD", "PUT", "DELETE")
+            if attempt == 1 and reused and (idempotent or not sent):
+                conn = get_connection(base_url)
+                continue
+            raise ConnectionFailed(f"{e} (server at {base_url or BASE_URL})")
+        break
+
+    if binary and 200 <= status < 300:
+        return data
+    content = data.decode("utf-8")
+
+    # Capture the session cookie from a login response (CLI session auth).
+    set_cookie = response.getheader("set-cookie") or response.getheader("Set-Cookie")
+    if set_cookie:
+        for part in set_cookie.split(";"):
+            part = part.strip()
+            if part.startswith("session="):
+                SESSION_COOKIE = part.split("=", 1)[1]
+                break
+
+    if 200 <= status < 300:
+        return json.loads(content) if content.strip() else {}
+    try:
+        detail = json.loads(content).get("detail", content)
+    except json.JSONDecodeError:
+        detail = content
+    raise _http_error(status, detail)

@@ -428,6 +428,49 @@ class Client:
             "client_version": client_version, "client_item_id": client_item_id, "data": data,
         })
 
+    # The server-side per-batch item cap (docs/BATCH_SYNC.md §2.5). The
+    # batch verbs chunk transparently so callers just pass their items.
+    BATCH_MAX_ITEMS = 200
+
+    def sync_records_batch(self, resource: str, client: str,
+                           items: List[Dict[str, Any]],
+                           client_version: str = "",
+                           actor: Optional[str] = None,
+                           include_records: bool = False) -> List[Dict[str, Any]]:
+        """The batch sync door (server >= 0.15.0, docs/BATCH_SYNC.md):
+        upsert many records in one transaction per chunk. Each item is
+        ``{client_item_id | id, data, asserts?, presets?}``; the response is
+        per-item ``{client_item_id, id, result, ...}`` tuples in request
+        order. `resource` is tool-instance-records or tool-catalog-records.
+        A pre-0.15 server 404s — callers fall back to the per-record doors.
+        Items beyond the server's cap are chunked transparently."""
+        out: List[Dict[str, Any]] = []
+        qs = "?include=records" if include_records else ""
+        for start in range(0, len(items), self.BATCH_MAX_ITEMS):
+            chunk = items[start:start + self.BATCH_MAX_ITEMS]
+            body: Dict[str, Any] = {"client": client,
+                                    "client_version": client_version,
+                                    "items": chunk}
+            if actor is not None:
+                body["actor"] = actor
+            out.extend(self._call("POST", f"/{resource}/sync{qs}",
+                                  body=body).get("items", []))
+        return out
+
+    def sync_tool_records(self, client: str, items: List[Dict[str, Any]],
+                          **kw) -> List[Dict[str, Any]]:
+        """Batch-sync ToolInstanceRecords (see sync_records_batch)."""
+        return self.sync_records_batch("tool-instance-records", client,
+                                       items, **kw)
+
+    def sync_catalog_records(self, client: str, items: List[Dict[str, Any]],
+                             **kw) -> List[Dict[str, Any]]:
+        """Batch-sync ToolCatalogRecords: identity is the natural key in
+        each item's asserts; a match is `exists` (own section still syncs).
+        For importers, pass `actor` = the manufacturer."""
+        return self.sync_records_batch("tool-catalog-records", client,
+                                       items, **kw)
+
     def upload_media(self, resource: str, record_id: str, *, data: bytes,
                      filename: str, role: str,
                      content_type: str = "application/octet-stream",
