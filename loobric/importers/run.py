@@ -100,3 +100,66 @@ def import_drafts(client, drafts, *, source: Optional[str] = None,
 def _emit(cb, kind, draft, info):
     if cb is not None:
         cb(kind, draft, info)
+
+
+@dataclass
+class LibraryImportReport:
+    """Outcome of a CAM-library import through the batch sync door, in the
+    door's own result vocabulary (docs/BATCH_SYNC.md §2)."""
+
+    created: List[Tuple[Any, dict]] = field(default_factory=list)
+    updated: List[Tuple[Any, dict]] = field(default_factory=list)
+    unchanged: List[Tuple[Any, dict]] = field(default_factory=list)
+    failed: List[Tuple[Any, Any]] = field(default_factory=list)
+    presets_contributed: int = 0
+    presets_skipped: int = 0
+    asserts_blocked: int = 0
+
+
+def import_library_drafts(client, drafts, *, client_name: Optional[str] = None,
+                          client_version: str = "",
+                          on_event: Optional[Callable[[str, Any, Any], None]] = None
+                          ) -> LibraryImportReport:
+    """Upsert CAM-library tools as ToolInstanceRecords via the batch sync door
+    (server >= 0.15.0). Identity is ``(client, client_item_id)``, so re-running
+    the same import updates records in place instead of duplicating. Asserts and
+    preset contributions ride the same batch items; the server stamps all
+    provenance. Event kinds: ``created``/``updated``/``unchanged``/``fail``."""
+    report = LibraryImportReport()
+    if not drafts:
+        return report
+
+    cname = client_name or drafts[0].client_name
+    items = []
+    for d in drafts:
+        item = {"client_item_id": d.client_item_id, "data": d.data,
+                "asserts": [
+                    dict({"path": path, "value": value},
+                         **({"unit": unit} if unit else {}))
+                    for path, value, unit in d.asserts]}
+        if d.presets:
+            item["presets"] = d.presets
+        items.append(item)
+
+    try:
+        results = client.sync_tool_records(cname, items,
+                                           client_version=client_version)
+    except HTTPError as e:
+        if e.status == 404:
+            raise LoobricClientError(
+                "the server has no batch sync door (needs loobric-server "
+                ">= 0.15.0) — CAM library import requires it") from e
+        raise
+
+    for draft, res in zip(drafts, results):
+        outcome = res.get("result")
+        if outcome not in ("created", "updated", "unchanged"):
+            report.failed.append((draft, res.get("error") or outcome))
+            _emit(on_event, "fail", draft, res.get("error") or outcome)
+            continue
+        getattr(report, outcome).append((draft, res))
+        report.presets_contributed += res.get("presets_contributed", 0)
+        report.presets_skipped += res.get("presets_skipped", 0)
+        report.asserts_blocked += res.get("asserts_blocked", 0)
+        _emit(on_event, outcome, draft, res.get("id"))
+    return report

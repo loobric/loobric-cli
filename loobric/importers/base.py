@@ -65,3 +65,28 @@ class CatalogRecordDraft:
         """The identity fields with no value — a draft missing any of these
         should be skipped, not sent as a malformed record."""
         return [k for k in IDENTITY_FIELDS if not self._leaf_value(k)]
+
+
+@dataclass
+class LibraryToolDraft:
+    """One tool parsed from a user's CAM library (Vectric, SprutCam, CAMotics…).
+
+    A CAM library describes tools the user *owns*, not manufacturer catalog
+    types — there is no manufacturer/product_code natural key, so these become
+    **ToolInstanceRecords** through the batch sync door, keyed by
+    ``(client, client_item_id)`` exactly like the Fusion client's import.
+
+    Pure data, no network. ``asserts`` are ``(path, value, unit)`` canonical
+    facts the source explicitly states (the server stamps provenance);
+    ``data`` is the client-section payload preserved losslessly; ``presets``
+    are cutting-data contribution bodies (docs/PRESETS.md floor already met —
+    anything below the floor stays in ``data``, never guessed up).
+    """
+
+    client_item_id: str
+    name: str
+    data: Dict[str, Any]
+    asserts: List[Any] = field(default_factory=list)     # (path, value, unit)
+    presets: List[Dict[str, Any]] = field(default_factory=list)
+    source_format: str = ""                               # e.g. "vectric"
+    client_name: str = "import"                           # batch-door client id

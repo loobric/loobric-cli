@@ -3,6 +3,29 @@
 All notable changes to **loobric-cli** (the Loobric client library + `loobric` CLI)
 are recorded here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] — 2026-08-17
+
+### Added
+- **CAM library importers** (loobric-clients #11/#17/#18): `loobric import`
+  now reads **Vectric `.vtdb`**, **SprutCam `.db`** (both plain SQLite,
+  told apart by table set), and **CAMotics** JSON tool tables. CAM
+  libraries describe tools the user *owns* — no manufacturer/product_code
+  natural key — so unlike the catalog formats they become
+  **ToolInstanceRecords** through the batch sync door, keyed by
+  `(client, client_item_id)`: re-running an import updates in place, never
+  duplicates. Cutting data rides along as preset contributions where the
+  PRESETS.md floor is met (Vectric's per-material/per-machine rows
+  normalize to vc/fz/ratio; SprutCam only when its material id resolves);
+  anything below the floor stays in the preserved source properties.
+  Shape is asserted only from the source's declared type enum — the
+  verified subset of each — never inferred (Vectric enum and the
+  extraction join recovered from the field-validated MASSO-forum
+  converter; verified against the Cadence Jenny Line database and the
+  forum's real SprutCam library; CAMotics read from its open source).
+  New `loobric.importers.base.LibraryToolDraft` +
+  `run.import_library_drafts()`; a Fusion library JSON is redirected to
+  loobric-fusion by name, not guessed at.
+
 ## [1.8.0] — 2026-08-17
 
 ### Added
